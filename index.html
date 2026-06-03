@@ -191,6 +191,34 @@
           <span class="control-value" id="filterrelease-val">0.5s</span>
         </div>
         <div class="control-row">
+            <span class="control-label">LFO Rate</span>
+            <input type="range" id="lforate" min="0.1" max="20" step="0.01" value="1">
+            <span class="control-value" id="lforate-val">1.00hz</span>
+        </div>
+        <div class="control-row">
+            <span class="control-label">LFO Depth</span>
+            <input type="range" id="lfodepth" min="0" max="1" step="0.01" value="0">
+            <span class="control-value" id="lfodepth-val">0.00</span>
+        </div>
+        <div class="control-row">
+            <span class="control-label">LFO Wave</span>
+            <select id="lfowave" style="flex:1; background:#1e2630; border:1px solid #2e3d4e; color:#8a9298; font-family:'Courier New',monospace; font-size:11px; padding:4px 8px;">
+                <option value="sine">Sine</option>
+                <option value="triangle">Triangle</option>
+                <option value="square">Square</option>
+                <option value="saw">Saw</option>
+            </select>
+        </div>
+        <div class="control-row">
+            <span class="control-label">LFO Dest</span>
+            <select id="lfodest" style="flex:1; background:#1e2630; border:1px solid #2e3d4e; color:#8a9298; font-family:'Courier New',monospace; font-size:11px; padding:4px 8px;">
+                <option value="pitch">Pitch</option>
+                <option value="filter">Filter</option>
+                <option value="volume">Volume</option>
+                <option value="pan">Pan</option>
+            </select>
+        </div>
+        <div class="control-row">
             <span class="control-label">OSC 1</span>
             <button id="osc1enable" data-enabled="true" style="
                 background: #3d2468;
@@ -397,6 +425,17 @@
         wireSlider('filterdecay',   'filterDecay',     's');
         wireSlider('filtersustain', 'filterSustain',   '');
         wireSlider('filterrelease', 'filterRelease',   's');
+
+        wireSlider('lforate',  'lfoRate',  'hz');
+        wireSlider('lfodepth', 'lfoDepth', '');
+
+        document.getElementById('lfowave').addEventListener('change', (e) => {
+            obsidian?.setParam('lfoWaveform', e.target.value);
+        });
+
+        document.getElementById('lfodest').addEventListener('change', (e) => {
+            obsidian?.setParam('lfoDestination', e.target.value);
+        });
 
         wireSlider('osc1Coarse', 'osc1Coarse', '');
         wireSlider('osc1Fine', 'osc1Fine', '');

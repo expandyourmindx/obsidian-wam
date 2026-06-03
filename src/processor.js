@@ -51,6 +51,19 @@ function getOscSample(phase, phaseIncrement, waveform) {
     }
 }
 
+function getLFOSample(phase, waveform) {
+    switch (waveform) {
+        case 'triangle':
+            return phase < 0.5 ? 4.0 * phase - 1.0 : 3.0 - 4.0 * phase;
+        case 'square':
+            return phase < 0.5 ? 1.0 : -1.0;
+        case 'saw':
+            return 2.0 * phase - 1.0;
+        default:
+            return Math.sin(phase * 2 * Math.PI);
+    }
+}
+
 function calcPhaseIncrement(note, coarse, fine) {
     const totalSemitones = coarse + fine / 100;
     const freq = 440 * Math.pow(2, (note - 69 + totalSemitones) / 12);
@@ -134,6 +147,10 @@ class ObsidianProcessor extends AudioWorkletProcessor {
             this.voices.push(createVoice());
         }
 
+        // LFO — global, not per voice
+        this.lfoPhase = 0;
+        this.lfoPhaseIncrement = 2 / sampleRate; // default 1hz, full cycle = 2 units
+
         // Parameters with defaults
         this.params = {
             attack: 0.01,
@@ -148,6 +165,10 @@ class ObsidianProcessor extends AudioWorkletProcessor {
             filterSustain: 0.3,
             filterRelease: 0.5,
             filterEnvAmount: 0.0,   // -1.0 to 1.0. 0 = no modulation
+            lfoRate: 1.0,        // Hz, 0.1 to 20
+            lfoDepth: 0.0,       // 0.0 to 1.0, default 0 so LFO is opt-in
+            lfoWaveform: 'sine', // sine | triangle | square | saw
+            lfoDestination: 'pitch', // pitch | filter | volume | pan
 
             // OSC 1
             osc1Waveform: 'saw',
@@ -182,6 +203,9 @@ class ObsidianProcessor extends AudioWorkletProcessor {
             if (type === 'noteOff') this.noteOff(data.note);
             if (type === 'setParam') {
                 this.params[data.key] = data.value;
+                if (data.key === 'lfoRate') {
+                    this.lfoPhaseIncrement = data.value / sampleRate;
+                }
                 this.voices.forEach(v => {
                     if (v.active) {
                         if (data.key === 'filterCutoff') v.filterCutoff = data.value;
@@ -339,36 +363,69 @@ class ObsidianProcessor extends AudioWorkletProcessor {
             let sampleL = 0;
             let sampleR = 0;
 
+            // Advance LFO
+            this.lfoPhase += this.lfoPhaseIncrement;
+            if (this.lfoPhase >= 1.0) this.lfoPhase -= 1.0;
+            const lfoValue = getLFOSample(this.lfoPhase, this.params.lfoWaveform) * this.params.lfoDepth;
+
             for (let v = 0; v < MAX_VOICES; v++) {
                 const voice = this.voices[v];
                 if (!voice.active) continue;
 
-                // OSC 1
+                // Apply LFO modulation to destination
+                let lfoFreqMod = 1.0;
+                let lfoFilterMod = 0.0;
+                let lfoVolumeMod = 1.0;
+                let lfoPanMod = 0.0;
+
+                switch (this.params.lfoDestination) {
+                    case 'pitch':
+                        // LFO modulates pitch — ±1 semitone at full depth
+                        lfoFreqMod = Math.pow(2, lfoValue / 12);
+                        break;
+                    case 'filter':
+                        // LFO modulates filter cutoff — adds directly to cutoff
+                        lfoFilterMod = lfoValue * 0.3;
+                        break;
+                    case 'volume':
+                        // LFO modulates amplitude
+                        lfoVolumeMod = 1.0 + lfoValue * 0.5;
+                        break;
+                    case 'pan':
+                        // LFO modulates stereo pan position
+                        lfoPanMod = lfoValue;
+                        break;
+                }
+
+                // OSC 1 — apply pitch mod
                 let sig1 = 0;
-                voice.osc1.phase += voice.osc1.phaseIncrement;
+                const osc1Inc = voice.osc1.phaseIncrement * lfoFreqMod;
+                voice.osc1.phase += osc1Inc;
                 if (voice.osc1.phase >= 1.0) voice.osc1.phase -= 1.0;
                 if (this.params.osc1Enabled) {
-                    sig1 = getOscSample(voice.osc1.phase, voice.osc1.phaseIncrement, this.params.osc1Waveform);
+                    sig1 = getOscSample(voice.osc1.phase, osc1Inc, this.params.osc1Waveform);
                 }
 
                 // OSC 2
                 let sig2 = 0;
-                voice.osc2.phase += voice.osc2.phaseIncrement;
+                const osc2Inc = voice.osc2.phaseIncrement * lfoFreqMod;
+                voice.osc2.phase += osc2Inc;
                 if (voice.osc2.phase >= 1.0) voice.osc2.phase -= 1.0;
                 if (this.params.osc2Enabled) {
-                    sig2 = getOscSample(voice.osc2.phase, voice.osc2.phaseIncrement, this.params.osc2Waveform);
+                    sig2 = getOscSample(voice.osc2.phase, osc2Inc, this.params.osc2Waveform);
                 }
 
                 // OSC 3
                 let sig3 = 0;
-                voice.osc3.phase += voice.osc3.phaseIncrement;
+                const osc3Inc = voice.osc3.phaseIncrement * lfoFreqMod;
+                voice.osc3.phase += osc3Inc;
                 if (voice.osc3.phase >= 1.0) voice.osc3.phase -= 1.0;
                 if (this.params.osc3Enabled) {
-                    sig3 = getOscSample(voice.osc3.phase, voice.osc3.phaseIncrement, this.params.osc3Waveform);
+                    sig3 = getOscSample(voice.osc3.phase, osc3Inc, this.params.osc3Waveform);
                 }
 
                 // Envelope
-                const env = this.processEnvelope(voice);
+                const env = this.processEnvelope(voice) * lfoVolumeMod;
 
                 // Process filter envelope
                 const filterEnv = this.processFilterEnvelope(voice);
@@ -376,7 +433,7 @@ class ObsidianProcessor extends AudioWorkletProcessor {
                 // Modulate cutoff — base cutoff + envelope amount * envelope value
                 // Clamped to 0-1 to stay in valid filter range
                 const modulatedCutoff = Math.max(0, Math.min(1,
-                    voice.filterCutoff + (filterEnv * this.params.filterEnvAmount)
+                    voice.filterCutoff + (filterEnv * this.params.filterEnvAmount) + lfoFilterMod
                 ));
 
                 // Temporarily override voice cutoff for this sample
@@ -384,9 +441,9 @@ class ObsidianProcessor extends AudioWorkletProcessor {
                 voice.filterCutoff = modulatedCutoff;
 
                 // Pan gains per oscillator
-                const [l1, r1] = panGains(this.params.osc1Pan);
-                const [l2, r2] = panGains(this.params.osc2Pan);
-                const [l3, r3] = panGains(this.params.osc3Pan);
+                const [l1, r1] = panGains(this.params.osc1Pan + lfoPanMod);
+                const [l2, r2] = panGains(this.params.osc2Pan + lfoPanMod);
+                const [l3, r3] = panGains(this.params.osc3Pan + lfoPanMod);
 
                 // Mix into stereo
                 let mixL = (sig1 * this.params.osc1Mix * l1 +
