@@ -321,16 +321,13 @@ class ObsidianProcessor extends AudioWorkletProcessor {
                 const [l2, r2] = panGains(this.params.osc2Pan);
                 const [l3, r3] = panGains(this.params.osc3Pan);
 
-                // Weighted mix into stereo
-                const totalMix = (this.params.osc1Enabled ? this.params.osc1Mix : 0) +
-                                 (this.params.osc2Enabled ? this.params.osc2Mix : 0) +
-                                 (this.params.osc3Enabled ? this.params.osc3Mix : 0) || 1;
+                // Mix into stereo
                 let mixL = (sig1 * this.params.osc1Mix * l1 +
                             sig2 * this.params.osc2Mix * l2 +
-                            sig3 * this.params.osc3Mix * l3) / totalMix;
+                            sig3 * this.params.osc3Mix * l3);
                 let mixR = (sig1 * this.params.osc1Mix * r1 +
                             sig2 * this.params.osc2Mix * r2 +
-                            sig3 * this.params.osc3Mix * r3) / totalMix;
+                            sig3 * this.params.osc3Mix * r3);
 
                 // Apply envelope and filter per channel
                 mixL = moogFilter(voice, mixL * env, 'L');
@@ -340,8 +337,8 @@ class ObsidianProcessor extends AudioWorkletProcessor {
                 sampleR += mixR;
             }
 
-            left[i] = (sampleL / MAX_VOICES) * this.params.masterGain;
-            right[i] = (sampleR / MAX_VOICES) * this.params.masterGain;
+            left[i] = Math.tanh((sampleL / MAX_VOICES) * this.params.masterGain);
+            right[i] = Math.tanh((sampleR / MAX_VOICES) * this.params.masterGain);
         }
 
         return true;
