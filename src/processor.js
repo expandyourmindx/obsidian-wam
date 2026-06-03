@@ -142,6 +142,7 @@ class ObsidianProcessor extends AudioWorkletProcessor {
             osc1Fine: 0,        // cents, -100 to +100
             osc1Mix: 1.0,       // 0.0 to 1.0
             osc1Pan: 0.0,
+            osc1Enabled: true,
 
             // OSC 2
             osc2Waveform: 'saw',
@@ -149,6 +150,7 @@ class ObsidianProcessor extends AudioWorkletProcessor {
             osc2Fine: 7,        // default +7 cents detune for thickness
             osc2Mix: 0.7,
             osc2Pan: -0.3,
+            osc2Enabled: true,
 
             // OSC 3
             osc3Waveform: 'square',
@@ -156,6 +158,7 @@ class ObsidianProcessor extends AudioWorkletProcessor {
             osc3Fine: 0,
             osc3Mix: 0.5,
             osc3Pan: 0.3,
+            osc3Enabled: true,
         };
 
         // Listen for messages from the main thread
@@ -287,19 +290,28 @@ class ObsidianProcessor extends AudioWorkletProcessor {
                 if (!voice.active) continue;
 
                 // OSC 1
-                let sig1 = getOscSample(voice.osc1.phase, voice.osc1.phaseIncrement, this.params.osc1Waveform);
+                let sig1 = 0;
                 voice.osc1.phase += voice.osc1.phaseIncrement;
                 if (voice.osc1.phase >= 1.0) voice.osc1.phase -= 1.0;
+                if (this.params.osc1Enabled) {
+                  sig1 = getOscSample(voice.osc1.phase, voice.osc1.phaseIncrement, this.params.osc1Waveform);
+                }
 
                 // OSC 2
-                let sig2 = getOscSample(voice.osc2.phase, voice.osc2.phaseIncrement, this.params.osc2Waveform);
+                let sig2 = 0;
                 voice.osc2.phase += voice.osc2.phaseIncrement;
                 if (voice.osc2.phase >= 1.0) voice.osc2.phase -= 1.0;
+                if (this.params.osc2Enabled) {
+                  sig2 = getOscSample(voice.osc2.phase, voice.osc2.phaseIncrement, this.params.osc2Waveform);
+                }
 
                 // OSC 3
-                let sig3 = getOscSample(voice.osc3.phase, voice.osc3.phaseIncrement, this.params.osc3Waveform);
+                let sig3 = 0;
                 voice.osc3.phase += voice.osc3.phaseIncrement;
                 if (voice.osc3.phase >= 1.0) voice.osc3.phase -= 1.0;
+                if (this.params.osc3Enabled) {
+                  sig3 = getOscSample(voice.osc3.phase, voice.osc3.phaseIncrement, this.params.osc3Waveform);
+                }
 
                 // Envelope
                 const env = this.processEnvelope(voice);
@@ -310,7 +322,9 @@ class ObsidianProcessor extends AudioWorkletProcessor {
                 const [l3, r3] = panGains(this.params.osc3Pan);
 
                 // Weighted mix into stereo
-                const totalMix = this.params.osc1Mix + this.params.osc2Mix + this.params.osc3Mix || 1;
+                const totalMix = (this.params.osc1Enabled ? this.params.osc1Mix : 0) +
+                                 (this.params.osc2Enabled ? this.params.osc2Mix : 0) +
+                                 (this.params.osc3Enabled ? this.params.osc3Mix : 0) || 1;
                 let mixL = (sig1 * this.params.osc1Mix * l1 +
                             sig2 * this.params.osc2Mix * l2 +
                             sig3 * this.params.osc3Mix * l3) / totalMix;

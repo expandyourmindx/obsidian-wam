@@ -158,6 +158,21 @@
             <span class="control-value" id="resonance-val">0.10</span>
         </div>
         <div class="control-row">
+            <span class="control-label">OSC 1</span>
+            <button id="osc1enable" data-enabled="true" style="
+                background: #3d2468;
+                border: 1px solid #7b4fcf;
+                color: #b08df0;
+                font-family: 'Courier New', monospace;
+                font-size: 9px;
+                font-weight: bold;
+                text-transform: uppercase;
+                letter-spacing: 0.15em;
+                padding: 4px 12px;
+                cursor: pointer;
+            ">ON</button>
+        </div>
+        <div class="control-row">
             <span class="control-label">Osc 1 Wave</span>
             <select id="osc1Waveform"
                 style="flex:1; background:#1e2630; border:1px solid #2e3d4e; color:#8a9298; font-family:'Courier New',monospace; font-size:11px; padding:4px 8px;">
@@ -189,6 +204,21 @@
         </div>
 
         <div class="control-row">
+            <span class="control-label">OSC 2</span>
+            <button id="osc2enable" data-enabled="true" style="
+                background: #3d2468;
+                border: 1px solid #7b4fcf;
+                color: #b08df0;
+                font-family: 'Courier New', monospace;
+                font-size: 9px;
+                font-weight: bold;
+                text-transform: uppercase;
+                letter-spacing: 0.15em;
+                padding: 4px 12px;
+                cursor: pointer;
+            ">ON</button>
+        </div>
+        <div class="control-row">
             <span class="control-label">Osc 2 Wave</span>
             <select id="osc2Waveform"
                 style="flex:1; background:#1e2630; border:1px solid #2e3d4e; color:#8a9298; font-family:'Courier New',monospace; font-size:11px; padding:4px 8px;">
@@ -219,6 +249,21 @@
             <span class="control-value" id="osc2Mix-val">0.70</span>
         </div>
 
+        <div class="control-row">
+            <span class="control-label">OSC 3</span>
+            <button id="osc3enable" data-enabled="true" style="
+                background: #3d2468;
+                border: 1px solid #7b4fcf;
+                color: #b08df0;
+                font-family: 'Courier New', monospace;
+                font-size: 9px;
+                font-weight: bold;
+                text-transform: uppercase;
+                letter-spacing: 0.15em;
+                padding: 4px 12px;
+                cursor: pointer;
+            ">ON</button>
+        </div>
         <div class="control-row">
             <span class="control-label">Osc 3 Wave</span>
             <select id="osc3Waveform"
@@ -338,6 +383,23 @@
         document.getElementById('osc3Waveform').addEventListener('change', (e) => {
             obsidian?.setParam('osc3Waveform', e.target.value);
         });
+
+        function wireToggle(id, paramKey) {
+          const btn = document.getElementById(id);
+          btn.addEventListener('click', () => {
+            const enabled = btn.dataset.enabled === 'true' ? false : true;
+            btn.dataset.enabled = enabled;
+            btn.textContent = enabled ? 'ON' : 'OFF';
+            btn.style.background = enabled ? '#3d2468' : '#1e2630';
+            btn.style.borderColor = enabled ? '#7b4fcf' : '#2e3d4e';
+            btn.style.color = enabled ? '#b08df0' : '#3a4450';
+            obsidian?.setParam(paramKey, enabled);
+          });
+        }
+
+        wireToggle('osc1enable', 'osc1Enabled');
+        wireToggle('osc2enable', 'osc2Enabled');
+        wireToggle('osc3enable', 'osc3Enabled');
 
         // Keyboard mapping — two rows give you a chromatic octave
         const keyMap = {
