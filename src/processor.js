@@ -21,47 +21,47 @@ function polyBlep(phase, phaseIncrement) {
 }
 
 function squareWave(phase, phaseIncrement) {
-  let square = phase < 0.5 ? 1.0 : -1.0;
-  square += polyBlep(phase, phaseIncrement);
-  square -= polyBlep((phase + 0.5) % 1.0, phaseIncrement);
-  return square;
+    let square = phase < 0.5 ? 1.0 : -1.0;
+    square += polyBlep(phase, phaseIncrement);
+    square -= polyBlep((phase + 0.5) % 1.0, phaseIncrement);
+    return square;
 }
 
 function triangleWave(phase, phaseIncrement) {
-  // Integrate a square wave to get a band-limited triangle
-  let tri = phase < 0.5
-    ? 4.0 * phase - 1.0
-    : 3.0 - 4.0 * phase;
-  return tri;
+    // Integrate a square wave to get a band-limited triangle
+    let tri = phase < 0.5
+        ? 4.0 * phase - 1.0
+        : 3.0 - 4.0 * phase;
+    return tri;
 }
 
 function sawWave(phase, phaseIncrement) {
-  let saw = 2.0 * phase - 1.0;
-  saw -= polyBlep(phase, phaseIncrement);
-  return saw;
+    let saw = 2.0 * phase - 1.0;
+    saw -= polyBlep(phase, phaseIncrement);
+    return saw;
 }
 
 // waveform: 'saw' | 'square' | 'triangle' | 'sine'
 function getOscSample(phase, phaseIncrement, waveform) {
-  switch (waveform) {
-    case 'sine':     return Math.sin(phase * 2 * Math.PI);
-    case 'square':   return squareWave(phase, phaseIncrement);
-    case 'triangle': return triangleWave(phase, phaseIncrement);
-    default:         return sawWave(phase, phaseIncrement);
-  }
+    switch (waveform) {
+        case 'sine': return Math.sin(phase * 2 * Math.PI);
+        case 'square': return squareWave(phase, phaseIncrement);
+        case 'triangle': return triangleWave(phase, phaseIncrement);
+        default: return sawWave(phase, phaseIncrement);
+    }
 }
 
 function calcPhaseIncrement(note, coarse, fine) {
-  const totalSemitones = coarse + fine / 100;
-  const freq = 440 * Math.pow(2, (note - 69 + totalSemitones) / 12);
-  return freq / sampleRate;
+    const totalSemitones = coarse + fine / 100;
+    const freq = 440 * Math.pow(2, (note - 69 + totalSemitones) / 12);
+    return freq / sampleRate;
 }
 
 // Equal power panning
 // Returns [leftGain, rightGain] for a pan value of -1.0 to 1.0
 function panGains(pan) {
-  const angle = (pan + 1.0) / 2.0 * Math.PI / 2.0;
-  return [Math.cos(angle), Math.sin(angle)];
+    const angle = (pan + 1.0) / 2.0 * Math.PI / 2.0;
+    return [Math.cos(angle), Math.sin(angle)];
 }
 
 // ── Moog Ladder Filter ───────────────────────────────────────────
@@ -70,24 +70,18 @@ function panGains(pan) {
 // cutoff: 0.0 - 1.0 (normalized, we'll convert to Hz)
 // resonance: 0.0 - 4.0 (above 1.0 it self-oscillates)
 function moogFilter(voice, input, ch) {
-  const cutoff = voice.filterCutoff;
-  const res = voice.filterResonance;
-  const f = cutoff * cutoff * 0.9;
+    const cutoff = voice.filterCutoff;
+    const res = voice.filterResonance;
+    const f = cutoff * cutoff * 0.9;
 
-  // Resonance compensation — boost input as resonance increases
-  // Prevents volume drop and keeps oscillator character intact
-  const compensation = 1.0 + res * 0.5;
-  const compensatedInput = input * compensation;
+    const feedback = res * voice[`filterStage4${ch}`] * (1.0 - f * 0.5);
 
-  // Scale feedback so resonance adds color without overwhelming signal
-  const feedback = res * 3.8 * (voice[`filterStage4${ch}`] - compensatedInput * 0.02);
+    voice[`filterStage1${ch}`] += f * (Math.tanh(input - feedback) - Math.tanh(voice[`filterStage1${ch}`]));
+    voice[`filterStage2${ch}`] += f * (Math.tanh(voice[`filterStage1${ch}`]) - Math.tanh(voice[`filterStage2${ch}`]));
+    voice[`filterStage3${ch}`] += f * (Math.tanh(voice[`filterStage2${ch}`]) - Math.tanh(voice[`filterStage3${ch}`]));
+    voice[`filterStage4${ch}`] += f * (Math.tanh(voice[`filterStage3${ch}`]) - Math.tanh(voice[`filterStage4${ch}`]));
 
-  voice[`filterStage1${ch}`] += f * (Math.tanh(compensatedInput - feedback) - Math.tanh(voice[`filterStage1${ch}`]));
-  voice[`filterStage2${ch}`] += f * (Math.tanh(voice[`filterStage1${ch}`]) - Math.tanh(voice[`filterStage2${ch}`]));
-  voice[`filterStage3${ch}`] += f * (Math.tanh(voice[`filterStage2${ch}`]) - Math.tanh(voice[`filterStage3${ch}`]));
-  voice[`filterStage4${ch}`] += f * (Math.tanh(voice[`filterStage3${ch}`]) - Math.tanh(voice[`filterStage4${ch}`]));
-
-  return voice[`filterStage4${ch}`];
+    return voice[`filterStage4${ch}`];
 }
 
 // ── Single voice ─────────────────────────────────────────────────
@@ -192,13 +186,13 @@ class ObsidianProcessor extends AudioWorkletProcessor {
                         if (data.key === 'filterCutoff') v.filterCutoff = data.value;
                         if (data.key === 'filterResonance') v.filterResonance = data.value;
                         if (data.key === 'osc1Fine' || data.key === 'osc1Coarse') {
-                          v.osc1.phaseIncrement = calcPhaseIncrement(v.note, this.params.osc1Coarse, this.params.osc1Fine);
+                            v.osc1.phaseIncrement = calcPhaseIncrement(v.note, this.params.osc1Coarse, this.params.osc1Fine);
                         }
                         if (data.key === 'osc2Fine' || data.key === 'osc2Coarse') {
-                          v.osc2.phaseIncrement = calcPhaseIncrement(v.note, this.params.osc2Coarse, this.params.osc2Fine);
+                            v.osc2.phaseIncrement = calcPhaseIncrement(v.note, this.params.osc2Coarse, this.params.osc2Fine);
                         }
                         if (data.key === 'osc3Fine' || data.key === 'osc3Coarse') {
-                          v.osc3.phaseIncrement = calcPhaseIncrement(v.note, this.params.osc3Coarse, this.params.osc3Fine);
+                            v.osc3.phaseIncrement = calcPhaseIncrement(v.note, this.params.osc3Coarse, this.params.osc3Fine);
                         }
                     }
                 });
@@ -303,34 +297,34 @@ class ObsidianProcessor extends AudioWorkletProcessor {
     }
 
     processFilterEnvelope(voice) {
-      switch (voice.filterEnvStage) {
-        case 1: // Attack
-          voice.filterEnvValue += voice.filterEnvAttackRate;
-          if (voice.filterEnvValue >= 1.0) {
-            voice.filterEnvValue = 1.0;
-            voice.filterEnvStage = 2;
-          }
-          break;
-        case 2: // Decay
-          voice.filterEnvValue -= voice.filterEnvDecayRate;
-          if (voice.filterEnvValue <= voice.filterEnvSustainLevel) {
-            voice.filterEnvValue = voice.filterEnvSustainLevel;
-            voice.filterEnvStage = 3;
-          }
-          break;
-        case 3: // Sustain
-          break;
-        case 4: // Release
-          voice.filterEnvValue -= voice.filterEnvReleaseRate;
-          if (voice.filterEnvValue <= 0) {
-            voice.filterEnvValue = 0;
-            voice.filterEnvStage = 0;
-          }
-          break;
-        default:
-          voice.filterEnvValue = 0;
-      }
-      return voice.filterEnvValue;
+        switch (voice.filterEnvStage) {
+            case 1: // Attack
+                voice.filterEnvValue += voice.filterEnvAttackRate;
+                if (voice.filterEnvValue >= 1.0) {
+                    voice.filterEnvValue = 1.0;
+                    voice.filterEnvStage = 2;
+                }
+                break;
+            case 2: // Decay
+                voice.filterEnvValue -= voice.filterEnvDecayRate;
+                if (voice.filterEnvValue <= voice.filterEnvSustainLevel) {
+                    voice.filterEnvValue = voice.filterEnvSustainLevel;
+                    voice.filterEnvStage = 3;
+                }
+                break;
+            case 3: // Sustain
+                break;
+            case 4: // Release
+                voice.filterEnvValue -= voice.filterEnvReleaseRate;
+                if (voice.filterEnvValue <= 0) {
+                    voice.filterEnvValue = 0;
+                    voice.filterEnvStage = 0;
+                }
+                break;
+            default:
+                voice.filterEnvValue = 0;
+        }
+        return voice.filterEnvValue;
     }
 
     // ── Main DSP loop ──────────────────────────────────────────────
@@ -353,7 +347,7 @@ class ObsidianProcessor extends AudioWorkletProcessor {
                 voice.osc1.phase += voice.osc1.phaseIncrement;
                 if (voice.osc1.phase >= 1.0) voice.osc1.phase -= 1.0;
                 if (this.params.osc1Enabled) {
-                  sig1 = getOscSample(voice.osc1.phase, voice.osc1.phaseIncrement, this.params.osc1Waveform);
+                    sig1 = getOscSample(voice.osc1.phase, voice.osc1.phaseIncrement, this.params.osc1Waveform);
                 }
 
                 // OSC 2
@@ -361,7 +355,7 @@ class ObsidianProcessor extends AudioWorkletProcessor {
                 voice.osc2.phase += voice.osc2.phaseIncrement;
                 if (voice.osc2.phase >= 1.0) voice.osc2.phase -= 1.0;
                 if (this.params.osc2Enabled) {
-                  sig2 = getOscSample(voice.osc2.phase, voice.osc2.phaseIncrement, this.params.osc2Waveform);
+                    sig2 = getOscSample(voice.osc2.phase, voice.osc2.phaseIncrement, this.params.osc2Waveform);
                 }
 
                 // OSC 3
@@ -369,7 +363,7 @@ class ObsidianProcessor extends AudioWorkletProcessor {
                 voice.osc3.phase += voice.osc3.phaseIncrement;
                 if (voice.osc3.phase >= 1.0) voice.osc3.phase -= 1.0;
                 if (this.params.osc3Enabled) {
-                  sig3 = getOscSample(voice.osc3.phase, voice.osc3.phaseIncrement, this.params.osc3Waveform);
+                    sig3 = getOscSample(voice.osc3.phase, voice.osc3.phaseIncrement, this.params.osc3Waveform);
                 }
 
                 // Envelope
@@ -381,7 +375,7 @@ class ObsidianProcessor extends AudioWorkletProcessor {
                 // Modulate cutoff — base cutoff + envelope amount * envelope value
                 // Clamped to 0-1 to stay in valid filter range
                 const modulatedCutoff = Math.max(0, Math.min(1,
-                  voice.filterCutoff + (filterEnv * this.params.filterEnvAmount)
+                    voice.filterCutoff + (filterEnv * this.params.filterEnvAmount)
                 ));
 
                 // Temporarily override voice cutoff for this sample
@@ -395,11 +389,11 @@ class ObsidianProcessor extends AudioWorkletProcessor {
 
                 // Mix into stereo
                 let mixL = (sig1 * this.params.osc1Mix * l1 +
-                            sig2 * this.params.osc2Mix * l2 +
-                            sig3 * this.params.osc3Mix * l3);
+                    sig2 * this.params.osc2Mix * l2 +
+                    sig3 * this.params.osc3Mix * l3);
                 let mixR = (sig1 * this.params.osc1Mix * r1 +
-                            sig2 * this.params.osc2Mix * r2 +
-                            sig3 * this.params.osc3Mix * r3);
+                    sig2 * this.params.osc2Mix * r2 +
+                    sig3 * this.params.osc3Mix * r3);
 
                 // Apply envelope and filter per channel
                 mixL = moogFilter(voice, mixL * env, 'L');
