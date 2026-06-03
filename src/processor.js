@@ -41,9 +41,10 @@ function sawWave(phase, phaseIncrement) {
   return saw;
 }
 
-// waveform: 'saw' | 'square' | 'triangle'
+// waveform: 'saw' | 'square' | 'triangle' | 'sine'
 function getOscSample(phase, phaseIncrement, waveform) {
   switch (waveform) {
+    case 'sine':     return Math.sin(phase * 2 * Math.PI);
     case 'square':   return squareWave(phase, phaseIncrement);
     case 'triangle': return triangleWave(phase, phaseIncrement);
     default:         return sawWave(phase, phaseIncrement);
