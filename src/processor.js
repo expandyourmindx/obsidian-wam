@@ -107,6 +107,14 @@ function createVoice() {
         envSustainLevel: 0,
         envReleaseRate: 0,
 
+        // Filter envelope state — mirrors amplitude envelope stages
+        filterEnvStage: 0,
+        filterEnvValue: 0,
+        filterEnvAttackRate: 0,
+        filterEnvDecayRate: 0,
+        filterEnvSustainLevel: 0,
+        filterEnvReleaseRate: 0,
+
         // Filter state
         filterCutoff: 0.8,
         filterResonance: 0.1,
@@ -135,6 +143,11 @@ class ObsidianProcessor extends AudioWorkletProcessor {
             masterGain: 0.5,
             filterCutoff: 0.8,
             filterResonance: 0.1,
+            filterAttack: 0.01,
+            filterDecay: 0.3,
+            filterSustain: 0.3,
+            filterRelease: 0.5,
+            filterEnvAmount: 0.0,   // -1.0 to 1.0. 0 = no modulation
 
             // OSC 1
             osc1Waveform: 'saw',
@@ -233,11 +246,21 @@ class ObsidianProcessor extends AudioWorkletProcessor {
         voice.envDecayRate = 1.0 / (this.params.decay * sampleRate);
         voice.envSustainLevel = this.params.sustain;
         voice.envReleaseRate = 1.0 / (this.params.release * sampleRate);
+
+        // Start filter envelope
+        voice.filterEnvStage = 1;
+        voice.filterEnvAttackRate = 1.0 / (this.params.filterAttack * sampleRate);
+        voice.filterEnvDecayRate = 1.0 / (this.params.filterDecay * sampleRate);
+        voice.filterEnvSustainLevel = this.params.filterSustain;
+        voice.filterEnvReleaseRate = 1.0 / (this.params.filterRelease * sampleRate);
     }
 
     noteOff(note) {
         const voice = this.voices.find(v => v.active && v.note === note);
-        if (voice) voice.envStage = 4; // trigger release
+        if (voice) {
+            voice.envStage = 4; // trigger release
+            voice.filterEnvStage = 4;
+        }
     }
 
     // ── ADSR per sample ────────────────────────────────────────────
@@ -272,6 +295,37 @@ class ObsidianProcessor extends AudioWorkletProcessor {
                 voice.envValue = 0;
         }
         return voice.envValue;
+    }
+
+    processFilterEnvelope(voice) {
+      switch (voice.filterEnvStage) {
+        case 1: // Attack
+          voice.filterEnvValue += voice.filterEnvAttackRate;
+          if (voice.filterEnvValue >= 1.0) {
+            voice.filterEnvValue = 1.0;
+            voice.filterEnvStage = 2;
+          }
+          break;
+        case 2: // Decay
+          voice.filterEnvValue -= voice.filterEnvDecayRate;
+          if (voice.filterEnvValue <= voice.filterEnvSustainLevel) {
+            voice.filterEnvValue = voice.filterEnvSustainLevel;
+            voice.filterEnvStage = 3;
+          }
+          break;
+        case 3: // Sustain
+          break;
+        case 4: // Release
+          voice.filterEnvValue -= voice.filterEnvReleaseRate;
+          if (voice.filterEnvValue <= 0) {
+            voice.filterEnvValue = 0;
+            voice.filterEnvStage = 0;
+          }
+          break;
+        default:
+          voice.filterEnvValue = 0;
+      }
+      return voice.filterEnvValue;
     }
 
     // ── Main DSP loop ──────────────────────────────────────────────
@@ -316,6 +370,19 @@ class ObsidianProcessor extends AudioWorkletProcessor {
                 // Envelope
                 const env = this.processEnvelope(voice);
 
+                // Process filter envelope
+                const filterEnv = this.processFilterEnvelope(voice);
+
+                // Modulate cutoff — base cutoff + envelope amount * envelope value
+                // Clamped to 0-1 to stay in valid filter range
+                const modulatedCutoff = Math.max(0, Math.min(1,
+                  voice.filterCutoff + (filterEnv * this.params.filterEnvAmount)
+                ));
+
+                // Temporarily override voice cutoff for this sample
+                const savedCutoff = voice.filterCutoff;
+                voice.filterCutoff = modulatedCutoff;
+
                 // Pan gains per oscillator
                 const [l1, r1] = panGains(this.params.osc1Pan);
                 const [l2, r2] = panGains(this.params.osc2Pan);
@@ -332,6 +399,9 @@ class ObsidianProcessor extends AudioWorkletProcessor {
                 // Apply envelope and filter per channel
                 mixL = moogFilter(voice, mixL * env, 'L');
                 mixR = moogFilter(voice, mixR * env, 'R');
+
+                // Restore base cutoff
+                voice.filterCutoff = savedCutoff;
 
                 sampleL += mixL;
                 sampleR += mixR;

@@ -158,6 +158,31 @@
             <span class="control-value" id="resonance-val">0.10</span>
         </div>
         <div class="control-row">
+          <span class="control-label">F. Env Amt</span>
+          <input type="range" id="filterenvamt" min="-1" max="1" step="0.01" value="0">
+          <span class="control-value" id="filterenvamt-val">0.00</span>
+        </div>
+        <div class="control-row">
+          <span class="control-label">F. Attack</span>
+          <input type="range" id="filterattack" min="0.001" max="2" step="0.001" value="0.01">
+          <span class="control-value" id="filterattack-val">0.01s</span>
+        </div>
+        <div class="control-row">
+          <span class="control-label">F. Decay</span>
+          <input type="range" id="filterdecay" min="0.001" max="2" step="0.001" value="0.3">
+          <span class="control-value" id="filterdecay-val">0.3s</span>
+        </div>
+        <div class="control-row">
+          <span class="control-label">F. Sustain</span>
+          <input type="range" id="filtersustain" min="0" max="1" step="0.01" value="0.3">
+          <span class="control-value" id="filtersustain-val">0.30</span>
+        </div>
+        <div class="control-row">
+          <span class="control-label">F. Release</span>
+          <input type="range" id="filterrelease" min="0.001" max="4" step="0.001" value="0.5">
+          <span class="control-value" id="filterrelease-val">0.5s</span>
+        </div>
+        <div class="control-row">
             <span class="control-label">OSC 1</span>
             <button id="osc1enable" data-enabled="true" style="
                 background: #3d2468;
@@ -358,6 +383,12 @@
         wireSlider('gain', 'masterGain', '');
         wireSlider('cutoff', 'filterCutoff', '');
         wireSlider('resonance', 'filterResonance', '');
+
+        wireSlider('filterenvamt',  'filterEnvAmount', '');
+        wireSlider('filterattack',  'filterAttack',    's');
+        wireSlider('filterdecay',   'filterDecay',     's');
+        wireSlider('filtersustain', 'filterSustain',   '');
+        wireSlider('filterrelease', 'filterRelease',   's');
 
         wireSlider('osc1Coarse', 'osc1Coarse', '');
         wireSlider('osc1Fine', 'osc1Fine', '');
