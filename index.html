@@ -158,14 +158,81 @@
             <span class="control-value" id="resonance-val">0.10</span>
         </div>
         <div class="control-row">
-            <span class="control-label">Waveform</span>
-            <select id="waveform"
+            <span class="control-label">Osc 1 Wave</span>
+            <select id="osc1Waveform"
                 style="flex:1; background:#1e2630; border:1px solid #2e3d4e; color:#8a9298; font-family:'Courier New',monospace; font-size:11px; padding:4px 8px;">
                 <option value="sine">Sine</option>
-                <option value="saw">Sawtooth</option>
+                <option value="saw" selected>Sawtooth</option>
                 <option value="square">Square</option>
                 <option value="triangle">Triangle</option>
             </select>
+        </div>
+        <div class="control-row">
+            <span class="control-label">Osc 1 Coarse</span>
+            <input type="range" id="osc1Coarse" min="-24" max="24" step="1" value="0">
+            <span class="control-value" id="osc1Coarse-val">0.00</span>
+        </div>
+        <div class="control-row">
+            <span class="control-label">Osc 1 Fine</span>
+            <input type="range" id="osc1Fine" min="-100" max="100" step="1" value="0">
+            <span class="control-value" id="osc1Fine-val">0.00</span>
+        </div>
+        <div class="control-row">
+            <span class="control-label">Osc 1 Mix</span>
+            <input type="range" id="osc1Mix" min="0" max="1" step="0.01" value="1.0">
+            <span class="control-value" id="osc1Mix-val">1.00</span>
+        </div>
+
+        <div class="control-row">
+            <span class="control-label">Osc 2 Wave</span>
+            <select id="osc2Waveform"
+                style="flex:1; background:#1e2630; border:1px solid #2e3d4e; color:#8a9298; font-family:'Courier New',monospace; font-size:11px; padding:4px 8px;">
+                <option value="sine">Sine</option>
+                <option value="saw" selected>Sawtooth</option>
+                <option value="square">Square</option>
+                <option value="triangle">Triangle</option>
+            </select>
+        </div>
+        <div class="control-row">
+            <span class="control-label">Osc 2 Coarse</span>
+            <input type="range" id="osc2Coarse" min="-24" max="24" step="1" value="0">
+            <span class="control-value" id="osc2Coarse-val">0.00</span>
+        </div>
+        <div class="control-row">
+            <span class="control-label">Osc 2 Fine</span>
+            <input type="range" id="osc2Fine" min="-100" max="100" step="1" value="7">
+            <span class="control-value" id="osc2Fine-val">7.00</span>
+        </div>
+        <div class="control-row">
+            <span class="control-label">Osc 2 Mix</span>
+            <input type="range" id="osc2Mix" min="0" max="1" step="0.01" value="0.7">
+            <span class="control-value" id="osc2Mix-val">0.70</span>
+        </div>
+
+        <div class="control-row">
+            <span class="control-label">Osc 3 Wave</span>
+            <select id="osc3Waveform"
+                style="flex:1; background:#1e2630; border:1px solid #2e3d4e; color:#8a9298; font-family:'Courier New',monospace; font-size:11px; padding:4px 8px;">
+                <option value="sine">Sine</option>
+                <option value="saw">Sawtooth</option>
+                <option value="square" selected>Square</option>
+                <option value="triangle">Triangle</option>
+            </select>
+        </div>
+        <div class="control-row">
+            <span class="control-label">Osc 3 Coarse</span>
+            <input type="range" id="osc3Coarse" min="-24" max="24" step="1" value="-12">
+            <span class="control-value" id="osc3Coarse-val">-12.00</span>
+        </div>
+        <div class="control-row">
+            <span class="control-label">Osc 3 Fine</span>
+            <input type="range" id="osc3Fine" min="-100" max="100" step="1" value="0">
+            <span class="control-value" id="osc3Fine-val">0.00</span>
+        </div>
+        <div class="control-row">
+            <span class="control-label">Osc 3 Mix</span>
+            <input type="range" id="osc3Mix" min="0" max="1" step="0.01" value="0.5">
+            <span class="control-value" id="osc3Mix-val">0.50</span>
         </div>
     </div>
 
@@ -232,8 +299,26 @@
         wireSlider('cutoff', 'filterCutoff', '');
         wireSlider('resonance', 'filterResonance', '');
 
-        document.getElementById('waveform').addEventListener('change', (e) => {
+        wireSlider('osc1Coarse', 'osc1Coarse', '');
+        wireSlider('osc1Fine', 'osc1Fine', '');
+        wireSlider('osc1Mix', 'osc1Mix', '');
+
+        wireSlider('osc2Coarse', 'osc2Coarse', '');
+        wireSlider('osc2Fine', 'osc2Fine', '');
+        wireSlider('osc2Mix', 'osc2Mix', '');
+
+        wireSlider('osc3Coarse', 'osc3Coarse', '');
+        wireSlider('osc3Fine', 'osc3Fine', '');
+        wireSlider('osc3Mix', 'osc3Mix', '');
+
+        document.getElementById('osc1Waveform').addEventListener('change', (e) => {
             obsidian?.setParam('osc1Waveform', e.target.value);
+        });
+        document.getElementById('osc2Waveform').addEventListener('change', (e) => {
+            obsidian?.setParam('osc2Waveform', e.target.value);
+        });
+        document.getElementById('osc3Waveform').addEventListener('change', (e) => {
+            obsidian?.setParam('osc3Waveform', e.target.value);
         });
 
         // Keyboard mapping — two rows give you a chromatic octave

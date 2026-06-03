@@ -51,6 +51,12 @@ function getOscSample(phase, phaseIncrement, waveform) {
   }
 }
 
+function calcPhaseIncrement(note, coarse, fine) {
+  const totalSemitones = coarse + fine / 100;
+  const freq = 440 * Math.pow(2, (note - 69 + totalSemitones) / 12);
+  return freq / sampleRate;
+}
+
 // ── Moog Ladder Filter ───────────────────────────────────────────
 // Four cascaded one-pole filters with resonance feedback.
 // This is the circuit that made the Minimoog famous.
@@ -82,9 +88,11 @@ function createVoice() {
         active: false,
         note: 0,
         frequency: 0,
-        phase: 0,
-        phaseIncrement: 0,
-        waveform: 'saw',
+
+        // Oscillator state — one per osc
+        osc1: { phase: 0, phaseIncrement: 0 },
+        osc2: { phase: 0, phaseIncrement: 0 },
+        osc3: { phase: 0, phaseIncrement: 0 },
 
         // ADSR state
         // Stages: 0=idle, 1=attack, 2=decay, 3=sustain, 4=release
@@ -125,7 +133,24 @@ class ObsidianProcessor extends AudioWorkletProcessor {
             masterGain: 0.5,
             filterCutoff: 0.8,
             filterResonance: 0.1,
+
+            // OSC 1
             osc1Waveform: 'saw',
+            osc1Coarse: 0,      // semitones, -24 to +24
+            osc1Fine: 0,        // cents, -100 to +100
+            osc1Mix: 1.0,       // 0.0 to 1.0
+
+            // OSC 2
+            osc2Waveform: 'saw',
+            osc2Coarse: 0,
+            osc2Fine: 7,        // default +7 cents detune for thickness
+            osc2Mix: 0.7,
+
+            // OSC 3
+            osc3Waveform: 'square',
+            osc3Coarse: -12,    // default sub octave
+            osc3Fine: 0,
+            osc3Mix: 0.5,
         };
 
         // Listen for messages from the main thread
@@ -140,7 +165,15 @@ class ObsidianProcessor extends AudioWorkletProcessor {
                     if (v.active) {
                         if (data.key === 'filterCutoff') v.filterCutoff = data.value;
                         if (data.key === 'filterResonance') v.filterResonance = data.value;
-                        if (data.key === 'osc1Waveform') v.waveform = data.value;
+                        if (data.key === 'osc1Fine' || data.key === 'osc1Coarse') {
+                          v.osc1.phaseIncrement = calcPhaseIncrement(v.note, this.params.osc1Coarse, this.params.osc1Fine);
+                        }
+                        if (data.key === 'osc2Fine' || data.key === 'osc2Coarse') {
+                          v.osc2.phaseIncrement = calcPhaseIncrement(v.note, this.params.osc2Coarse, this.params.osc2Fine);
+                        }
+                        if (data.key === 'osc3Fine' || data.key === 'osc3Coarse') {
+                          v.osc3.phaseIncrement = calcPhaseIncrement(v.note, this.params.osc3Coarse, this.params.osc3Fine);
+                        }
                     }
                 });
             }
@@ -165,9 +198,14 @@ class ObsidianProcessor extends AudioWorkletProcessor {
         voice.active = true;
         voice.note = note;
         voice.frequency = freq;
-        voice.phase = 0;
-        voice.phaseIncrement = freq / sampleRate; // sampleRate is a global in AudioWorklet
-        voice.waveform = this.params.osc1Waveform;
+        voice.osc1.phase = 0;
+        voice.osc1.phaseIncrement = calcPhaseIncrement(note, this.params.osc1Coarse, this.params.osc1Fine);
+
+        voice.osc2.phase = 0;
+        voice.osc2.phaseIncrement = calcPhaseIncrement(note, this.params.osc2Coarse, this.params.osc2Fine);
+
+        voice.osc3.phase = 0;
+        voice.osc3.phaseIncrement = calcPhaseIncrement(note, this.params.osc3Coarse, this.params.osc3Fine);
 
         voice.filterCutoff = this.params.filterCutoff;
         voice.filterResonance = this.params.filterResonance;
@@ -238,9 +276,31 @@ class ObsidianProcessor extends AudioWorkletProcessor {
                 const voice = this.voices[v];
                 if (!voice.active) continue;
 
-                let signal = getOscSample(voice.phase, voice.phaseIncrement, voice.waveform);
-                voice.phase += voice.phaseIncrement;
-                if (voice.phase >= 1.0) voice.phase -= 1.0;
+                // OSC 1
+                let sig1 = getOscSample(voice.osc1.phase, voice.osc1.phaseIncrement, this.params.osc1Waveform);
+                voice.osc1.phase += voice.osc1.phaseIncrement;
+                if (voice.osc1.phase >= 1.0) voice.osc1.phase -= 1.0;
+
+                // OSC 2
+                let sig2 = getOscSample(voice.osc2.phase, voice.osc2.phaseIncrement, this.params.osc2Waveform);
+                voice.osc2.phase += voice.osc2.phaseIncrement;
+                if (voice.osc2.phase >= 1.0) voice.osc2.phase -= 1.0;
+
+                // OSC 3
+                let sig3 = getOscSample(voice.osc3.phase, voice.osc3.phaseIncrement, this.params.osc3Waveform);
+                voice.osc3.phase += voice.osc3.phaseIncrement;
+                if (voice.osc3.phase >= 1.0) voice.osc3.phase -= 1.0;
+
+                // Mix all three
+                let signal = (sig1 * this.params.osc1Mix) +
+                             (sig2 * this.params.osc2Mix) +
+                             (sig3 * this.params.osc3Mix);
+
+                // Normalize by total mix to prevent clipping
+                const totalMix = this.params.osc1Mix + this.params.osc2Mix + this.params.osc3Mix || 1;
+                signal /= totalMix;
+
+                // Envelope and filter
                 const env = this.processEnvelope(voice);
                 signal = signal * env;
                 signal = moogFilter(voice, signal);
