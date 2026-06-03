@@ -57,28 +57,32 @@ function calcPhaseIncrement(note, coarse, fine) {
   return freq / sampleRate;
 }
 
+// Equal power panning
+// Returns [leftGain, rightGain] for a pan value of -1.0 to 1.0
+function panGains(pan) {
+  const angle = (pan + 1.0) / 2.0 * Math.PI / 2.0;
+  return [Math.cos(angle), Math.sin(angle)];
+}
+
 // ── Moog Ladder Filter ───────────────────────────────────────────
 // Four cascaded one-pole filters with resonance feedback.
 // This is the circuit that made the Minimoog famous.
 // cutoff: 0.0 - 1.0 (normalized, we'll convert to Hz)
 // resonance: 0.0 - 4.0 (above 1.0 it self-oscillates)
-function moogFilter(voice, input) {
-    const cutoff = voice.filterCutoff;
-    const res = voice.filterResonance;
+function moogFilter(voice, input, ch) {
+  const cutoff = voice.filterCutoff;
+  const res = voice.filterResonance;
+  const f = cutoff * cutoff * 0.9;
 
-    // Frequency warping — maps 0-1 to a useful Hz range (20-18000)
-    const f = cutoff * cutoff * 0.9;
+  const s4key = `filterStage4${ch}`;
+  const feedback = res * (voice[s4key] - input * 0.05);
 
-    // Feedback with resonance
-    const feedback = res * (voice.filterStage4 - input * 0.05);
+  voice[`filterStage1${ch}`] += f * (Math.tanh(input - feedback) - Math.tanh(voice[`filterStage1${ch}`]));
+  voice[`filterStage2${ch}`] += f * (Math.tanh(voice[`filterStage1${ch}`]) - Math.tanh(voice[`filterStage2${ch}`]));
+  voice[`filterStage3${ch}`] += f * (Math.tanh(voice[`filterStage2${ch}`]) - Math.tanh(voice[`filterStage3${ch}`]));
+  voice[`filterStage4${ch}`] += f * (Math.tanh(voice[`filterStage3${ch}`]) - Math.tanh(voice[`filterStage4${ch}`]));
 
-    // Four cascaded one-pole lowpass stages
-    voice.filterStage1 += f * (Math.tanh(input - feedback) - Math.tanh(voice.filterStage1));
-    voice.filterStage2 += f * (Math.tanh(voice.filterStage1) - Math.tanh(voice.filterStage2));
-    voice.filterStage3 += f * (Math.tanh(voice.filterStage2) - Math.tanh(voice.filterStage3));
-    voice.filterStage4 += f * (Math.tanh(voice.filterStage3) - Math.tanh(voice.filterStage4));
-
-    return voice.filterStage4;
+  return voice[s4key];
 }
 
 // ── Single voice ─────────────────────────────────────────────────
@@ -106,10 +110,8 @@ function createVoice() {
         // Filter state
         filterCutoff: 0.8,
         filterResonance: 0.1,
-        filterStage1: 0,
-        filterStage2: 0,
-        filterStage3: 0,
-        filterStage4: 0,
+        filterStage1L: 0, filterStage2L: 0, filterStage3L: 0, filterStage4L: 0,
+        filterStage1R: 0, filterStage2R: 0, filterStage3R: 0, filterStage4R: 0,
     };
 }
 
@@ -139,18 +141,21 @@ class ObsidianProcessor extends AudioWorkletProcessor {
             osc1Coarse: 0,      // semitones, -24 to +24
             osc1Fine: 0,        // cents, -100 to +100
             osc1Mix: 1.0,       // 0.0 to 1.0
+            osc1Pan: 0.0,
 
             // OSC 2
             osc2Waveform: 'saw',
             osc2Coarse: 0,
             osc2Fine: 7,        // default +7 cents detune for thickness
             osc2Mix: 0.7,
+            osc2Pan: -0.3,
 
             // OSC 3
             osc3Waveform: 'square',
             osc3Coarse: -12,    // default sub octave
             osc3Fine: 0,
             osc3Mix: 0.5,
+            osc3Pan: 0.3,
         };
 
         // Listen for messages from the main thread
@@ -210,10 +215,14 @@ class ObsidianProcessor extends AudioWorkletProcessor {
         voice.filterCutoff = this.params.filterCutoff;
         voice.filterResonance = this.params.filterResonance;
         // Reset filter stages on new note to prevent clicks
-        voice.filterStage1 = 0;
-        voice.filterStage2 = 0;
-        voice.filterStage3 = 0;
-        voice.filterStage4 = 0;
+        voice.filterStage1L = 0;
+        voice.filterStage2L = 0;
+        voice.filterStage3L = 0;
+        voice.filterStage4L = 0;
+        voice.filterStage1R = 0;
+        voice.filterStage2R = 0;
+        voice.filterStage3R = 0;
+        voice.filterStage4R = 0;
 
         // Start attack
         voice.envStage = 1;
@@ -270,7 +279,8 @@ class ObsidianProcessor extends AudioWorkletProcessor {
         const right = output[1];
 
         for (let i = 0; i < left.length; i++) {
-            let sample = 0;
+            let sampleL = 0;
+            let sampleR = 0;
 
             for (let v = 0; v < MAX_VOICES; v++) {
                 const voice = this.voices[v];
@@ -291,25 +301,33 @@ class ObsidianProcessor extends AudioWorkletProcessor {
                 voice.osc3.phase += voice.osc3.phaseIncrement;
                 if (voice.osc3.phase >= 1.0) voice.osc3.phase -= 1.0;
 
-                // Mix all three
-                let signal = (sig1 * this.params.osc1Mix) +
-                             (sig2 * this.params.osc2Mix) +
-                             (sig3 * this.params.osc3Mix);
-
-                // Normalize by total mix to prevent clipping
-                const totalMix = this.params.osc1Mix + this.params.osc2Mix + this.params.osc3Mix || 1;
-                signal /= totalMix;
-
-                // Envelope and filter
+                // Envelope
                 const env = this.processEnvelope(voice);
-                signal = signal * env;
-                signal = moogFilter(voice, signal);
-                sample += signal;
+
+                // Pan gains per oscillator
+                const [l1, r1] = panGains(this.params.osc1Pan);
+                const [l2, r2] = panGains(this.params.osc2Pan);
+                const [l3, r3] = panGains(this.params.osc3Pan);
+
+                // Weighted mix into stereo
+                const totalMix = this.params.osc1Mix + this.params.osc2Mix + this.params.osc3Mix || 1;
+                let mixL = (sig1 * this.params.osc1Mix * l1 +
+                            sig2 * this.params.osc2Mix * l2 +
+                            sig3 * this.params.osc3Mix * l3) / totalMix;
+                let mixR = (sig1 * this.params.osc1Mix * r1 +
+                            sig2 * this.params.osc2Mix * r2 +
+                            sig3 * this.params.osc3Mix * r3) / totalMix;
+
+                // Apply envelope and filter per channel
+                mixL = moogFilter(voice, mixL * env, 'L');
+                mixR = moogFilter(voice, mixR * env, 'R');
+
+                sampleL += mixL;
+                sampleR += mixR;
             }
 
-            const out = (sample / MAX_VOICES) * this.params.masterGain;
-            left[i] = out;
-            right[i] = out;
+            left[i] = (sampleL / MAX_VOICES) * this.params.masterGain;
+            right[i] = (sampleR / MAX_VOICES) * this.params.masterGain;
         }
 
         return true;
