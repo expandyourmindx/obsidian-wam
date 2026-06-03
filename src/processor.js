@@ -154,6 +154,7 @@ class ObsidianProcessor extends AudioWorkletProcessor {
 
         // Parameters with defaults
         this.params = {
+            pitchBend: 0, // semitones, ±2
             attack: 0.01,
             decay: 0.1,
             sustain: 0.7,
@@ -403,7 +404,8 @@ class ObsidianProcessor extends AudioWorkletProcessor {
 
                 // OSC 1 — apply pitch mod
                 let sig1 = 0;
-                const osc1Inc = voice.osc1.phaseIncrement * lfoFreqMod;
+                const bendMod = Math.pow(2, this.params.pitchBend / 12);
+                const osc1Inc = voice.osc1.phaseIncrement * lfoFreqMod * bendMod;
                 voice.osc1.phase += osc1Inc;
                 if (voice.osc1.phase >= 1.0) voice.osc1.phase -= 1.0;
                 if (this.params.osc1Enabled) {
@@ -412,7 +414,7 @@ class ObsidianProcessor extends AudioWorkletProcessor {
 
                 // OSC 2
                 let sig2 = 0;
-                const osc2Inc = voice.osc2.phaseIncrement * lfoFreqMod;
+                const osc2Inc = voice.osc2.phaseIncrement * lfoFreqMod * bendMod;
                 voice.osc2.phase += osc2Inc;
                 if (voice.osc2.phase >= 1.0) voice.osc2.phase -= 1.0;
                 if (this.params.osc2Enabled) {
@@ -421,7 +423,7 @@ class ObsidianProcessor extends AudioWorkletProcessor {
 
                 // OSC 3
                 let sig3 = 0;
-                const osc3Inc = voice.osc3.phaseIncrement * lfoFreqMod;
+                const osc3Inc = voice.osc3.phaseIncrement * lfoFreqMod * bendMod;
                 voice.osc3.phase += osc3Inc;
                 if (voice.osc3.phase >= 1.0) voice.osc3.phase -= 1.0;
                 if (this.params.osc3Enabled) {
