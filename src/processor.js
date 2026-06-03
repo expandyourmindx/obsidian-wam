@@ -20,6 +20,36 @@ function polyBlep(phase, phaseIncrement) {
     return 0.0;
 }
 
+function squareWave(phase, phaseIncrement) {
+  let square = phase < 0.5 ? 1.0 : -1.0;
+  square += polyBlep(phase, phaseIncrement);
+  square -= polyBlep((phase + 0.5) % 1.0, phaseIncrement);
+  return square;
+}
+
+function triangleWave(phase, phaseIncrement) {
+  // Integrate a square wave to get a band-limited triangle
+  let tri = phase < 0.5
+    ? 4.0 * phase - 1.0
+    : 3.0 - 4.0 * phase;
+  return tri;
+}
+
+function sawWave(phase, phaseIncrement) {
+  let saw = 2.0 * phase - 1.0;
+  saw -= polyBlep(phase, phaseIncrement);
+  return saw;
+}
+
+// waveform: 'saw' | 'square' | 'triangle'
+function getOscSample(phase, phaseIncrement, waveform) {
+  switch (waveform) {
+    case 'square':   return squareWave(phase, phaseIncrement);
+    case 'triangle': return triangleWave(phase, phaseIncrement);
+    default:         return sawWave(phase, phaseIncrement);
+  }
+}
+
 // ── Moog Ladder Filter ───────────────────────────────────────────
 // Four cascaded one-pole filters with resonance feedback.
 // This is the circuit that made the Minimoog famous.
@@ -53,6 +83,7 @@ function createVoice() {
         frequency: 0,
         phase: 0,
         phaseIncrement: 0,
+        waveform: 'saw',
 
         // ADSR state
         // Stages: 0=idle, 1=attack, 2=decay, 3=sustain, 4=release
@@ -93,6 +124,7 @@ class ObsidianProcessor extends AudioWorkletProcessor {
             masterGain: 0.5,
             filterCutoff: 0.8,
             filterResonance: 0.1,
+            osc1Waveform: 'saw',
         };
 
         // Listen for messages from the main thread
@@ -107,6 +139,7 @@ class ObsidianProcessor extends AudioWorkletProcessor {
                     if (v.active) {
                         if (data.key === 'filterCutoff') v.filterCutoff = data.value;
                         if (data.key === 'filterResonance') v.filterResonance = data.value;
+                        if (data.key === 'osc1Waveform') v.waveform = data.value;
                     }
                 });
             }
@@ -133,6 +166,7 @@ class ObsidianProcessor extends AudioWorkletProcessor {
         voice.frequency = freq;
         voice.phase = 0;
         voice.phaseIncrement = freq / sampleRate; // sampleRate is a global in AudioWorklet
+        voice.waveform = this.params.osc1Waveform;
 
         voice.filterCutoff = this.params.filterCutoff;
         voice.filterResonance = this.params.filterResonance;
@@ -203,17 +237,11 @@ class ObsidianProcessor extends AudioWorkletProcessor {
                 const voice = this.voices[v];
                 if (!voice.active) continue;
 
-                // PolyBLEP sawtooth
-                let saw = 2.0 * voice.phase - 1.0;
-                saw -= polyBlep(voice.phase, voice.phaseIncrement);
-
-                // Advance phase
+                let signal = getOscSample(voice.phase, voice.phaseIncrement, voice.waveform);
                 voice.phase += voice.phaseIncrement;
                 if (voice.phase >= 1.0) voice.phase -= 1.0;
-
-                // Apply envelope
                 const env = this.processEnvelope(voice);
-                let signal = saw * env;
+                signal = signal * env;
                 signal = moogFilter(voice, signal);
                 sample += signal;
             }
