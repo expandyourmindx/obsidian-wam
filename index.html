@@ -119,6 +119,14 @@
     <h1>OBSIDIAN</h1>
     <div class="status" id="status">Initializing...</div>
 
+    <canvas id="spectrogram" width="800" height="200" style="
+      width: 800px;
+      height: 200px;
+      background: #080b0f;
+      border: 1px solid #2e3d4e;
+      display: block;
+    "></canvas>
+
     <div class="keys" id="keys"></div>
 
     <div class="controls">
@@ -499,7 +507,7 @@
                 const audioNode = await obsidian.createAudioNode();
 
                 // Connect directly to speakers
-                audioNode.connect(audioContext.destination);
+                initSpectrogram(audioContext, audioNode);
 
                 status.textContent = 'Ready';
                 status.className = 'status ready';
@@ -508,6 +516,97 @@
                 status.textContent = `Error: ${err.message}`;
                 status.className = 'status error';
             }
+        }
+
+        let analyser = null;
+        let spectrogramAnimFrame = null;
+
+        function initSpectrogram(audioContext, sourceNode) {
+          analyser = audioContext.createAnalyser();
+          analyser.fftSize = 4096;
+          analyser.smoothingTimeConstant = 0.8;
+
+          // Insert analyser between source and destination
+          sourceNode.disconnect();
+          sourceNode.connect(analyser);
+          analyser.connect(audioContext.destination);
+
+          drawSpectrogram();
+        }
+
+        function drawSpectrogram() {
+          spectrogramAnimFrame = requestAnimationFrame(drawSpectrogram);
+
+          const canvas = document.getElementById('spectrogram');
+          const ctx = canvas.getContext('2d');
+          const width = canvas.width;
+          const height = canvas.height;
+
+          const bufferLength = analyser.frequencyBinCount;
+          const dataArray = new Float32Array(bufferLength);
+          analyser.getFloatFrequencyData(dataArray);
+
+          // Clear
+          ctx.fillStyle = '#080b0f';
+          ctx.fillRect(0, 0, width, height);
+
+          // Frequency grid lines
+          const freqs = [100, 200, 500, 1000, 2000, 5000, 10000];
+          const nyquist = analyser.context.sampleRate / 2;
+          ctx.strokeStyle = '#1e2630';
+          ctx.lineWidth = 1;
+          ctx.fillStyle = '#3a4450';
+          ctx.font = '9px Courier New';
+          freqs.forEach(freq => {
+            const x = (Math.log10(freq / 20) / Math.log10(nyquist / 20)) * width;
+            ctx.beginPath();
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, height);
+            ctx.stroke();
+            ctx.fillText(freq >= 1000 ? `${freq/1000}k` : freq, x + 2, height - 4);
+          });
+
+          // dB grid lines
+          const dbLevels = [-20, -40, -60, -80];
+          dbLevels.forEach(db => {
+            const y = ((db - (-100)) / 100) * height;
+            const flippedY = height - y;
+            ctx.strokeStyle = '#1e2630';
+            ctx.beginPath();
+            ctx.moveTo(0, flippedY);
+            ctx.lineTo(width, flippedY);
+            ctx.stroke();
+            ctx.fillStyle = '#3a4450';
+            ctx.fillText(`${db}dB`, 2, flippedY - 2);
+          });
+
+          // Spectrum curve — logarithmic frequency axis
+          ctx.beginPath();
+          ctx.strokeStyle = '#7b4fcf';
+          ctx.lineWidth = 2;
+
+          for (let x = 0; x < width; x++) {
+            // Map x to frequency logarithmically (20hz - nyquist)
+            const freq = 20 * Math.pow(nyquist / 20, x / width);
+            const binIndex = Math.round(freq / nyquist * bufferLength);
+            const clamped = Math.max(0, Math.min(bufferLength - 1, binIndex));
+
+            // dataArray values are in dB, range roughly -100 to 0
+            const db = dataArray[clamped];
+            const normalized = (db + 100) / 100; // 0 to 1
+            const y = height - (normalized * height);
+
+            if (x === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          }
+          ctx.stroke();
+
+          // Fill under curve
+          ctx.lineTo(width, height);
+          ctx.lineTo(0, height);
+          ctx.closePath();
+          ctx.fillStyle = 'rgba(123, 79, 207, 0.15)';
+          ctx.fill();
         }
 
         document.addEventListener('click', boot, { once: true });
