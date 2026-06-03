@@ -74,15 +74,20 @@ function moogFilter(voice, input, ch) {
   const res = voice.filterResonance;
   const f = cutoff * cutoff * 0.9;
 
-  const s4key = `filterStage4${ch}`;
-  const feedback = res * (voice[s4key] - input * 0.05);
+  // Resonance compensation — boost input as resonance increases
+  // Prevents volume drop and keeps oscillator character intact
+  const compensation = 1.0 + res * 0.5;
+  const compensatedInput = input * compensation;
 
-  voice[`filterStage1${ch}`] += f * (Math.tanh(input - feedback) - Math.tanh(voice[`filterStage1${ch}`]));
+  // Scale feedback so resonance adds color without overwhelming signal
+  const feedback = res * 3.8 * (voice[`filterStage4${ch}`] - compensatedInput * 0.02);
+
+  voice[`filterStage1${ch}`] += f * (Math.tanh(compensatedInput - feedback) - Math.tanh(voice[`filterStage1${ch}`]));
   voice[`filterStage2${ch}`] += f * (Math.tanh(voice[`filterStage1${ch}`]) - Math.tanh(voice[`filterStage2${ch}`]));
   voice[`filterStage3${ch}`] += f * (Math.tanh(voice[`filterStage2${ch}`]) - Math.tanh(voice[`filterStage3${ch}`]));
   voice[`filterStage4${ch}`] += f * (Math.tanh(voice[`filterStage3${ch}`]) - Math.tanh(voice[`filterStage4${ch}`]));
 
-  return voice[s4key];
+  return voice[`filterStage4${ch}`];
 }
 
 // ── Single voice ─────────────────────────────────────────────────
