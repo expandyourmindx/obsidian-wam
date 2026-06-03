@@ -74,14 +74,15 @@ function moogFilter(voice, input, ch) {
     const res = voice.filterResonance;
     const f = cutoff * cutoff * 0.9;
 
-    const feedback = res * voice[`filterStage4${ch}`] * (1.0 - f * 0.5);
+    const scaledRes = res * 0.4; // spread range across full slider travel
+    const feedback = scaledRes * 3.6 * voice[`filterStage4${ch}`];
 
     voice[`filterStage1${ch}`] += f * (Math.tanh(input - feedback) - Math.tanh(voice[`filterStage1${ch}`]));
     voice[`filterStage2${ch}`] += f * (Math.tanh(voice[`filterStage1${ch}`]) - Math.tanh(voice[`filterStage2${ch}`]));
     voice[`filterStage3${ch}`] += f * (Math.tanh(voice[`filterStage2${ch}`]) - Math.tanh(voice[`filterStage3${ch}`]));
     voice[`filterStage4${ch}`] += f * (Math.tanh(voice[`filterStage3${ch}`]) - Math.tanh(voice[`filterStage4${ch}`]));
 
-    return voice[`filterStage4${ch}`];
+    return voice[`filterStage4${ch}`] * (1.0 + scaledRes * 0.8);
 }
 
 // ── Single voice ─────────────────────────────────────────────────
