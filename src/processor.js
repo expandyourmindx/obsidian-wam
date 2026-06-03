@@ -105,6 +105,7 @@ function createVoice() {
         active: false,
         note: 0,
         frequency: 0,
+        velocity: 1.0,
 
         // Oscillator state — one per osc
         osc1: { phase: 0, phaseIncrement: 0 },
@@ -169,6 +170,8 @@ class ObsidianProcessor extends AudioWorkletProcessor {
             lfoDepth: 0.0,       // 0.0 to 1.0, default 0 so LFO is opt-in
             lfoWaveform: 'sine', // sine | triangle | square | saw
             lfoDestination: 'pitch', // pitch | filter | volume | pan
+            velocityAmpSens: 1.0,     // 0.0 to 1.0 — how much velocity affects volume
+            velocityFilterSens: 0.5,  // 0.0 to 1.0 — how much velocity opens the filter
 
             // OSC 1
             osc1Waveform: 'saw',
@@ -243,6 +246,7 @@ class ObsidianProcessor extends AudioWorkletProcessor {
         voice.active = true;
         voice.note = note;
         voice.frequency = freq;
+        voice.velocity = velocity / 127;
         voice.osc1.phase = 0;
         voice.osc1.phaseIncrement = calcPhaseIncrement(note, this.params.osc1Coarse, this.params.osc1Fine);
 
@@ -425,15 +429,17 @@ class ObsidianProcessor extends AudioWorkletProcessor {
                 }
 
                 // Envelope
-                const env = this.processEnvelope(voice) * lfoVolumeMod;
+                const velAmp = 1.0 - this.params.velocityAmpSens * (1.0 - voice.velocity);
+                const env = this.processEnvelope(voice) * lfoVolumeMod * velAmp;
 
                 // Process filter envelope
                 const filterEnv = this.processFilterEnvelope(voice);
 
                 // Modulate cutoff — base cutoff + envelope amount * envelope value
                 // Clamped to 0-1 to stay in valid filter range
+                const velFilterBoost = voice.velocity * this.params.velocityFilterSens * 0.3;
                 const modulatedCutoff = Math.max(0, Math.min(1,
-                    voice.filterCutoff + (filterEnv * this.params.filterEnvAmount) + lfoFilterMod
+                    voice.filterCutoff + (filterEnv * this.params.filterEnvAmount) + lfoFilterMod + velFilterBoost
                 ));
 
                 // Temporarily override voice cutoff for this sample

@@ -156,6 +156,16 @@
             <span class="control-value" id="gain-val">0.50</span>
         </div>
         <div class="control-row">
+            <span class="control-label">Vel Amp</span>
+            <input type="range" id="velamp" min="0" max="1" step="0.01" value="1">
+            <span class="control-value" id="velamp-val">1.00</span>
+        </div>
+        <div class="control-row">
+            <span class="control-label">Vel Filter</span>
+            <input type="range" id="velfilter" min="0" max="1" step="0.01" value="0.5">
+            <span class="control-value" id="velfilter-val">0.50</span>
+        </div>
+        <div class="control-row">
             <span class="control-label">Cutoff</span>
             <input type="range" id="cutoff" min="0.01" max="1" step="0.001" value="0.8">
             <span class="control-value" id="cutoff-val">0.80</span>
@@ -417,6 +427,8 @@
         wireSlider('sustain', 'sustain', '');
         wireSlider('release', 'release', 's');
         wireSlider('gain', 'masterGain', '');
+        wireSlider('velamp',    'velocityAmpSens',    '');
+        wireSlider('velfilter', 'velocityFilterSens', '');
         wireSlider('cutoff', 'filterCutoff', '');
         wireSlider('resonance', 'filterResonance', '');
 
