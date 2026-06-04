@@ -134,6 +134,14 @@ function createVoice() {
         filterEnvSustainLevel: 0,
         filterEnvReleaseRate: 0,
 
+        // Pitch envelope state
+        pitchEnvStage: 0,
+        pitchEnvValue: 0,
+        pitchEnvAttackRate: 0,
+        pitchEnvDecayRate: 0,
+        pitchEnvSustainLevel: 0,
+        pitchEnvReleaseRate: 0,
+
         // Filter state
         filterCutoff: 0.8,
         filterResonance: 0.1,
@@ -163,6 +171,11 @@ class ObsidianProcessor extends AudioWorkletProcessor {
             unisonVoices: 1,      // 1 to 8. 1 = unison off, normal behavior
             unisonDetune: 10,     // cents, 0 to 100
             unisonSpread: 0.8,    // stereo spread, 0.0 to 1.0
+            pitchEnvAmount: 0,      // semitones, -24 to +24. 0 = off
+            pitchEnvAttack: 0.001,  // very fast default
+            pitchEnvDecay: 0.2,     // short decay — classic 808 snap
+            pitchEnvSustain: 0.0,   // zero sustain by default — transient shape
+            pitchEnvRelease: 0.1,
             attack: 0.01,
             decay: 0.1,
             sustain: 0.7,
@@ -339,6 +352,13 @@ class ObsidianProcessor extends AudioWorkletProcessor {
         voice.filterEnvDecayRate = 1.0 / (this.params.filterDecay * sampleRate);
         voice.filterEnvSustainLevel = this.params.filterSustain;
         voice.filterEnvReleaseRate = 1.0 / (this.params.filterRelease * sampleRate);
+
+        // Start pitch envelope
+        voice.pitchEnvStage = 1;
+        voice.pitchEnvAttackRate = 1.0 / (this.params.pitchEnvAttack * sampleRate);
+        voice.pitchEnvDecayRate = 1.0 / (this.params.pitchEnvDecay * sampleRate);
+        voice.pitchEnvSustainLevel = this.params.pitchEnvSustain;
+        voice.pitchEnvReleaseRate = 1.0 / (this.params.pitchEnvRelease * sampleRate);
     }
 
     noteOff(note) {
@@ -346,6 +366,7 @@ class ObsidianProcessor extends AudioWorkletProcessor {
         if (voice) {
             voice.envStage = 4; // trigger release
             voice.filterEnvStage = 4;
+            voice.pitchEnvStage = 4;
         }
     }
 
@@ -414,6 +435,37 @@ class ObsidianProcessor extends AudioWorkletProcessor {
         return voice.filterEnvValue;
     }
 
+    processPitchEnvelope(voice) {
+      switch (voice.pitchEnvStage) {
+        case 1: // Attack
+          voice.pitchEnvValue += voice.pitchEnvAttackRate;
+          if (voice.pitchEnvValue >= 1.0) {
+            voice.pitchEnvValue = 1.0;
+            voice.pitchEnvStage = 2;
+          }
+          break;
+        case 2: // Decay
+          voice.pitchEnvValue -= voice.pitchEnvDecayRate;
+          if (voice.pitchEnvValue <= voice.pitchEnvSustainLevel) {
+            voice.pitchEnvValue = voice.pitchEnvSustainLevel;
+            voice.pitchEnvStage = 3;
+          }
+          break;
+        case 3: // Sustain
+          break;
+        case 4: // Release
+          voice.pitchEnvValue -= voice.pitchEnvReleaseRate;
+          if (voice.pitchEnvValue <= 0) {
+            voice.pitchEnvValue = 0;
+            voice.pitchEnvStage = 0;
+          }
+          break;
+        default:
+          voice.pitchEnvValue = 0;
+      }
+      return voice.pitchEnvValue;
+    }
+
     // ── Main DSP loop ──────────────────────────────────────────────
     // Called every 128 samples (~3ms at 44100hz). Must complete fast.
     process(inputs, outputs) {
@@ -462,6 +514,10 @@ class ObsidianProcessor extends AudioWorkletProcessor {
                 const unisonCount = Math.max(1, Math.floor(this.params.unisonVoices));
                 const bendMod = Math.pow(2, this.params.pitchBend / 12);
 
+                // Pitch envelope modulation
+                const pitchEnv = this.processPitchEnvelope(voice);
+                const pitchEnvMod = Math.pow(2, (pitchEnv * this.params.pitchEnvAmount) / 12);
+
                 let sig1L = 0, sig1R = 0;
                 let sig2L = 0, sig2R = 0;
                 let sig3L = 0, sig3R = 0;
@@ -475,7 +531,7 @@ class ObsidianProcessor extends AudioWorkletProcessor {
 
                   // OSC 1
                   if (this.params.osc1Enabled) {
-                    const inc1 = voice.unisonOsc1[u].phaseIncrement * lfoFreqMod * bendMod;
+                    const inc1 = voice.unisonOsc1[u].phaseIncrement * lfoFreqMod * bendMod * pitchEnvMod;
                     voice.unisonOsc1[u].phase += inc1;
                     if (voice.unisonOsc1[u].phase >= 1.0) voice.unisonOsc1[u].phase -= 1.0;
                     const s1 = getOscSample(voice.unisonOsc1[u].phase, inc1, this.params.osc1Waveform);
@@ -486,7 +542,7 @@ class ObsidianProcessor extends AudioWorkletProcessor {
 
                   // OSC 2
                   if (this.params.osc2Enabled) {
-                    const inc2 = voice.unisonOsc2[u].phaseIncrement * lfoFreqMod * bendMod;
+                    const inc2 = voice.unisonOsc2[u].phaseIncrement * lfoFreqMod * bendMod * pitchEnvMod;
                     voice.unisonOsc2[u].phase += inc2;
                     if (voice.unisonOsc2[u].phase >= 1.0) voice.unisonOsc2[u].phase -= 1.0;
                     const s2 = getOscSample(voice.unisonOsc2[u].phase, inc2, this.params.osc2Waveform);
@@ -497,7 +553,7 @@ class ObsidianProcessor extends AudioWorkletProcessor {
 
                   // OSC 3
                   if (this.params.osc3Enabled) {
-                    const inc3 = voice.unisonOsc3[u].phaseIncrement * lfoFreqMod * bendMod;
+                    const inc3 = voice.unisonOsc3[u].phaseIncrement * lfoFreqMod * bendMod * pitchEnvMod;
                     voice.unisonOsc3[u].phase += inc3;
                     if (voice.unisonOsc3[u].phase >= 1.0) voice.unisonOsc3[u].phase -= 1.0;
                     const s3 = getOscSample(voice.unisonOsc3[u].phase, inc3, this.params.osc3Waveform);

@@ -315,6 +315,31 @@
           <span class="control-value" id="filterrelease-val">0.5s</span>
         </div>
         <div class="control-row">
+          <span class="control-label">P. Env Amt</span>
+          <input type="range" id="pitchenvamt" data-param="pitchEnvAmount" min="-24" max="24" step="0.1" value="0">
+          <span class="control-value" id="pitchenvamt-val">0.0st</span>
+        </div>
+        <div class="control-row">
+          <span class="control-label">P. Attack</span>
+          <input type="range" id="pitchattack" data-param="pitchEnvAttack" min="0.001" max="2" step="0.001" value="0.001">
+          <span class="control-value" id="pitchattack-val">0.00s</span>
+        </div>
+        <div class="control-row">
+          <span class="control-label">P. Decay</span>
+          <input type="range" id="pitchdecay" data-param="pitchEnvDecay" min="0.001" max="4" step="0.001" value="0.2">
+          <span class="control-value" id="pitchdecay-val">0.20s</span>
+        </div>
+        <div class="control-row">
+          <span class="control-label">P. Sustain</span>
+          <input type="range" id="pitchsustain" data-param="pitchEnvSustain" min="0" max="1" step="0.01" value="0">
+          <span class="control-value" id="pitchsustain-val">0.00</span>
+        </div>
+        <div class="control-row">
+          <span class="control-label">P. Release</span>
+          <input type="range" id="pitchrelease" data-param="pitchEnvRelease" min="0.001" max="4" step="0.001" value="0.1">
+          <span class="control-value" id="pitchrelease-val">0.10s</span>
+        </div>
+        <div class="control-row">
             <span class="control-label">LFO Rate</span>
             <input type="range" id="lforate" data-param="lfoRate" min="0.1" max="20" step="0.01" value="1">
             <span class="control-value" id="lforate-val">1.00hz</span>
@@ -593,6 +618,12 @@
         wireSlider('filterdecay',   'filterDecay',     's');
         wireSlider('filtersustain', 'filterSustain',   '');
         wireSlider('filterrelease', 'filterRelease',   's');
+
+        wireSlider('pitchenvamt',  'pitchEnvAmount',  'st');
+        wireSlider('pitchattack',  'pitchEnvAttack',  's');
+        wireSlider('pitchdecay',   'pitchEnvDecay',   's');
+        wireSlider('pitchsustain', 'pitchEnvSustain', '');
+        wireSlider('pitchrelease', 'pitchEnvRelease', 's');
 
         wireSlider('lforate',  'lfoRate',  'hz');
         wireSlider('lfodepth', 'lfoDepth', '');
