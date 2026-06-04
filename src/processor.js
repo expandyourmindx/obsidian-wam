@@ -20,11 +20,16 @@ function polyBlep(phase, phaseIncrement) {
     return 0.0;
 }
 
-function squareWave(phase, phaseIncrement) {
-    let square = phase < 0.5 ? 1.0 : -1.0;
-    square += polyBlep(phase, phaseIncrement);
-    square -= polyBlep((phase + 0.5) % 1.0, phaseIncrement);
-    return square;
+function squareWave(phase, phaseIncrement, pulseWidth) {
+  // Variable pulse width — 0.5 is a perfect square wave
+  // Values away from 0.5 create a rectangular wave with different harmonic content
+  let square = phase < pulseWidth ? 1.0 : -1.0;
+  // PolyBLEP corrections at both discontinuities
+  square += polyBlep(phase, phaseIncrement);
+  square -= polyBlep((phase - pulseWidth + 1.0) % 1.0, phaseIncrement);
+  // DC offset compensation — rectangular waves have DC offset when width != 0.5
+  square -= (2.0 * pulseWidth - 1.0);
+  return square;
 }
 
 function triangleWave(phase, phaseIncrement) {
@@ -42,10 +47,10 @@ function sawWave(phase, phaseIncrement) {
 }
 
 // waveform: 'saw' | 'square' | 'triangle' | 'sine'
-function getOscSample(phase, phaseIncrement, waveform) {
+function getOscSample(phase, phaseIncrement, waveform, pulseWidth = 0.5) {
     switch (waveform) {
         case 'sine': return Math.sin(phase * 2 * Math.PI);
-        case 'square': return squareWave(phase, phaseIncrement);
+        case 'square': return squareWave(phase, phaseIncrement, pulseWidth);
         case 'triangle': return triangleWave(phase, phaseIncrement);
         default: return sawWave(phase, phaseIncrement);
     }
@@ -179,6 +184,12 @@ class ObsidianProcessor extends AudioWorkletProcessor {
         this.params = {
             pitchBend: 0, // semitones, ±2
             filterType: 'lowpass', // lowpass | highpass | bandpass | notch
+            osc1PulseWidth: 0.5,   // 0.1 to 0.9, 0.5 = perfect square
+            osc2PulseWidth: 0.5,
+            osc3PulseWidth: 0.5,
+            osc1PWMDepth: 0.0,     // 0.0 to 1.0, how much LFO modulates pulse width
+            osc2PWMDepth: 0.0,
+            osc3PWMDepth: 0.0,
             unisonVoices: 1,      // 1 to 8. 1 = unison off, normal behavior
             unisonDetune: 10,     // cents, 0 to 100
             unisonSpread: 0.8,    // stereo spread, 0.0 to 1.0
@@ -531,6 +542,18 @@ class ObsidianProcessor extends AudioWorkletProcessor {
                 const pitchEnv = this.processPitchEnvelope(voice);
                 const pitchEnvMod = Math.pow(2, (pitchEnv * this.params.pitchEnvAmount) / 12);
 
+                // PWM — LFO modulates pulse width when depth > 0
+                // lfoValue is already calculated above as -1 to +1
+                const pw1 = Math.max(0.1, Math.min(0.9,
+                  this.params.osc1PulseWidth + lfoValue * this.params.osc1PWMDepth * 0.4
+                ));
+                const pw2 = Math.max(0.1, Math.min(0.9,
+                  this.params.osc2PulseWidth + lfoValue * this.params.osc2PWMDepth * 0.4
+                ));
+                const pw3 = Math.max(0.1, Math.min(0.9,
+                  this.params.osc3PulseWidth + lfoValue * this.params.osc3PWMDepth * 0.4
+                ));
+
                 let sig1L = 0, sig1R = 0;
                 let sig2L = 0, sig2R = 0;
                 let sig3L = 0, sig3R = 0;
@@ -547,7 +570,7 @@ class ObsidianProcessor extends AudioWorkletProcessor {
                     const inc1 = voice.unisonOsc1[u].phaseIncrement * lfoFreqMod * bendMod * pitchEnvMod;
                     voice.unisonOsc1[u].phase += inc1;
                     if (voice.unisonOsc1[u].phase >= 1.0) voice.unisonOsc1[u].phase -= 1.0;
-                    const s1 = getOscSample(voice.unisonOsc1[u].phase, inc1, this.params.osc1Waveform);
+                    const s1 = getOscSample(voice.unisonOsc1[u].phase, inc1, this.params.osc1Waveform, pw1);
                     const [l1, r1] = panGains(this.params.osc1Pan + unisonPan + lfoPanMod);
                     sig1L += s1 * l1;
                     sig1R += s1 * r1;
@@ -558,7 +581,7 @@ class ObsidianProcessor extends AudioWorkletProcessor {
                     const inc2 = voice.unisonOsc2[u].phaseIncrement * lfoFreqMod * bendMod * pitchEnvMod;
                     voice.unisonOsc2[u].phase += inc2;
                     if (voice.unisonOsc2[u].phase >= 1.0) voice.unisonOsc2[u].phase -= 1.0;
-                    const s2 = getOscSample(voice.unisonOsc2[u].phase, inc2, this.params.osc2Waveform);
+                    const s2 = getOscSample(voice.unisonOsc2[u].phase, inc2, this.params.osc2Waveform, pw2);
                     const [l2, r2] = panGains(this.params.osc2Pan + unisonPan + lfoPanMod);
                     sig2L += s2 * l2;
                     sig2R += s2 * r2;
@@ -569,7 +592,7 @@ class ObsidianProcessor extends AudioWorkletProcessor {
                     const inc3 = voice.unisonOsc3[u].phaseIncrement * lfoFreqMod * bendMod * pitchEnvMod;
                     voice.unisonOsc3[u].phase += inc3;
                     if (voice.unisonOsc3[u].phase >= 1.0) voice.unisonOsc3[u].phase -= 1.0;
-                    const s3 = getOscSample(voice.unisonOsc3[u].phase, inc3, this.params.osc3Waveform);
+                    const s3 = getOscSample(voice.unisonOsc3[u].phase, inc3, this.params.osc3Waveform, pw3);
                     const [l3, r3] = panGains(this.params.osc3Pan + unisonPan + lfoPanMod);
                     sig3L += s3 * l3;
                     sig3R += s3 * r3;
