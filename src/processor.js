@@ -112,6 +112,11 @@ function createVoice() {
         osc2: { phase: 0, phaseIncrement: 0 },
         osc3: { phase: 0, phaseIncrement: 0 },
 
+        // Unison oscillator state — pre-allocated for max 8 unison voices
+        unisonOsc1: Array.from({ length: 8 }, () => ({ phase: Math.random() })),
+        unisonOsc2: Array.from({ length: 8 }, () => ({ phase: Math.random() })),
+        unisonOsc3: Array.from({ length: 8 }, () => ({ phase: Math.random() })),
+
         // ADSR state
         // Stages: 0=idle, 1=attack, 2=decay, 3=sustain, 4=release
         envStage: 0,
@@ -155,6 +160,9 @@ class ObsidianProcessor extends AudioWorkletProcessor {
         // Parameters with defaults
         this.params = {
             pitchBend: 0, // semitones, ±2
+            unisonVoices: 1,      // 1 to 8. 1 = unison off, normal behavior
+            unisonDetune: 10,     // cents, 0 to 100
+            unisonSpread: 0.8,    // stereo spread, 0.0 to 1.0
             attack: 0.01,
             decay: 0.1,
             sustain: 0.7,
@@ -225,6 +233,27 @@ class ObsidianProcessor extends AudioWorkletProcessor {
                         }
                     }
                 });
+
+                if (data.key === 'unisonVoices' || data.key === 'unisonDetune') {
+                  this.voices.forEach(v => {
+                    if (!v.active) return;
+                    const unisonCount = Math.max(1, Math.floor(this.params.unisonVoices));
+                    for (let u = 0; u < 8; u++) {
+                      if (unisonCount === 1) {
+                        v.unisonOsc1[u].phaseIncrement = v.osc1.phaseIncrement;
+                        v.unisonOsc2[u].phaseIncrement = v.osc2.phaseIncrement;
+                        v.unisonOsc3[u].phaseIncrement = v.osc3.phaseIncrement;
+                      } else {
+                        const spread = u / (unisonCount - 1);
+                        const detuneCents = (spread - 0.5) * 2 * this.params.unisonDetune;
+                        const detuneRatio = Math.pow(2, detuneCents / 1200);
+                        v.unisonOsc1[u].phaseIncrement = v.osc1.phaseIncrement * detuneRatio;
+                        v.unisonOsc2[u].phaseIncrement = v.osc2.phaseIncrement * detuneRatio;
+                        v.unisonOsc3[u].phaseIncrement = v.osc3.phaseIncrement * detuneRatio;
+                      }
+                    }
+                  });
+                }
             }
         };
     }
@@ -256,6 +285,34 @@ class ObsidianProcessor extends AudioWorkletProcessor {
 
         voice.osc3.phase = 0;
         voice.osc3.phaseIncrement = calcPhaseIncrement(note, this.params.osc3Coarse, this.params.osc3Fine);
+
+        // Set up unison oscillator phase increments
+        // Each copy gets a detune offset spread evenly across the detune range
+        const unisonCount = Math.max(1, Math.floor(this.params.unisonVoices));
+        for (let u = 0; u < 8; u++) {
+          if (unisonCount === 1) {
+            // No detune — single copy at base pitch
+            voice.unisonOsc1[u].phaseIncrement = voice.osc1.phaseIncrement;
+            voice.unisonOsc2[u].phaseIncrement = voice.osc2.phaseIncrement;
+            voice.unisonOsc3[u].phaseIncrement = voice.osc3.phaseIncrement;
+          } else {
+            // Spread detune evenly across copies
+            // Center copy (if odd count) is at 0 cents detune
+            const spread = u / (unisonCount - 1); // 0.0 to 1.0
+            const detuneCents = (spread - 0.5) * 2 * this.params.unisonDetune;
+            const detuneRatio = Math.pow(2, detuneCents / 1200);
+            voice.unisonOsc1[u].phaseIncrement = voice.osc1.phaseIncrement * detuneRatio;
+            voice.unisonOsc2[u].phaseIncrement = voice.osc2.phaseIncrement * detuneRatio;
+            voice.unisonOsc3[u].phaseIncrement = voice.osc3.phaseIncrement * detuneRatio;
+          }
+        }
+
+        // Randomize phases on retrigger to prevent phase cancellation
+        for (let u = 0; u < 8; u++) {
+          voice.unisonOsc1[u].phase = Math.random();
+          voice.unisonOsc2[u].phase = Math.random();
+          voice.unisonOsc3[u].phase = Math.random();
+        }
 
         voice.filterCutoff = this.params.filterCutoff;
         voice.filterResonance = this.params.filterResonance;
@@ -402,32 +459,52 @@ class ObsidianProcessor extends AudioWorkletProcessor {
                         break;
                 }
 
-                // OSC 1 — apply pitch mod
-                let sig1 = 0;
+                const unisonCount = Math.max(1, Math.floor(this.params.unisonVoices));
                 const bendMod = Math.pow(2, this.params.pitchBend / 12);
-                const osc1Inc = voice.osc1.phaseIncrement * lfoFreqMod * bendMod;
-                voice.osc1.phase += osc1Inc;
-                if (voice.osc1.phase >= 1.0) voice.osc1.phase -= 1.0;
-                if (this.params.osc1Enabled) {
-                    sig1 = getOscSample(voice.osc1.phase, osc1Inc, this.params.osc1Waveform);
-                }
 
-                // OSC 2
-                let sig2 = 0;
-                const osc2Inc = voice.osc2.phaseIncrement * lfoFreqMod * bendMod;
-                voice.osc2.phase += osc2Inc;
-                if (voice.osc2.phase >= 1.0) voice.osc2.phase -= 1.0;
-                if (this.params.osc2Enabled) {
-                    sig2 = getOscSample(voice.osc2.phase, osc2Inc, this.params.osc2Waveform);
-                }
+                let sig1L = 0, sig1R = 0;
+                let sig2L = 0, sig2R = 0;
+                let sig3L = 0, sig3R = 0;
 
-                // OSC 3
-                let sig3 = 0;
-                const osc3Inc = voice.osc3.phaseIncrement * lfoFreqMod * bendMod;
-                voice.osc3.phase += osc3Inc;
-                if (voice.osc3.phase >= 1.0) voice.osc3.phase -= 1.0;
-                if (this.params.osc3Enabled) {
-                    sig3 = getOscSample(voice.osc3.phase, osc3Inc, this.params.osc3Waveform);
+                for (let u = 0; u < unisonCount; u++) {
+                  // Calculate stereo position for this unison copy
+                  // First copy pans left, last copy pans right, middle copies spread between
+                  const unisonPan = unisonCount === 1
+                    ? 0
+                    : (u / (unisonCount - 1) - 0.5) * 2 * this.params.unisonSpread;
+
+                  // OSC 1
+                  if (this.params.osc1Enabled) {
+                    const inc1 = voice.unisonOsc1[u].phaseIncrement * lfoFreqMod * bendMod;
+                    voice.unisonOsc1[u].phase += inc1;
+                    if (voice.unisonOsc1[u].phase >= 1.0) voice.unisonOsc1[u].phase -= 1.0;
+                    const s1 = getOscSample(voice.unisonOsc1[u].phase, inc1, this.params.osc1Waveform);
+                    const [l1, r1] = panGains(this.params.osc1Pan + unisonPan + lfoPanMod);
+                    sig1L += s1 * l1;
+                    sig1R += s1 * r1;
+                  }
+
+                  // OSC 2
+                  if (this.params.osc2Enabled) {
+                    const inc2 = voice.unisonOsc2[u].phaseIncrement * lfoFreqMod * bendMod;
+                    voice.unisonOsc2[u].phase += inc2;
+                    if (voice.unisonOsc2[u].phase >= 1.0) voice.unisonOsc2[u].phase -= 1.0;
+                    const s2 = getOscSample(voice.unisonOsc2[u].phase, inc2, this.params.osc2Waveform);
+                    const [l2, r2] = panGains(this.params.osc2Pan + unisonPan + lfoPanMod);
+                    sig2L += s2 * l2;
+                    sig2R += s2 * r2;
+                  }
+
+                  // OSC 3
+                  if (this.params.osc3Enabled) {
+                    const inc3 = voice.unisonOsc3[u].phaseIncrement * lfoFreqMod * bendMod;
+                    voice.unisonOsc3[u].phase += inc3;
+                    if (voice.unisonOsc3[u].phase >= 1.0) voice.unisonOsc3[u].phase -= 1.0;
+                    const s3 = getOscSample(voice.unisonOsc3[u].phase, inc3, this.params.osc3Waveform);
+                    const [l3, r3] = panGains(this.params.osc3Pan + unisonPan + lfoPanMod);
+                    sig3L += s3 * l3;
+                    sig3R += s3 * r3;
+                  }
                 }
 
                 // Envelope
@@ -448,18 +525,16 @@ class ObsidianProcessor extends AudioWorkletProcessor {
                 const savedCutoff = voice.filterCutoff;
                 voice.filterCutoff = modulatedCutoff;
 
-                // Pan gains per oscillator
-                const [l1, r1] = panGains(this.params.osc1Pan + lfoPanMod);
-                const [l2, r2] = panGains(this.params.osc2Pan + lfoPanMod);
-                const [l3, r3] = panGains(this.params.osc3Pan + lfoPanMod);
+                // Normalize by unison count to prevent volume increase with more voices
+                const unisonNorm = 1.0 / Math.sqrt(unisonCount);
 
-                // Mix into stereo
-                let mixL = (sig1 * this.params.osc1Mix * l1 +
-                    sig2 * this.params.osc2Mix * l2 +
-                    sig3 * this.params.osc3Mix * l3);
-                let mixR = (sig1 * this.params.osc1Mix * r1 +
-                    sig2 * this.params.osc2Mix * r2 +
-                    sig3 * this.params.osc3Mix * r3);
+                // Mix all oscillators
+                let mixL = (sig1L * this.params.osc1Mix +
+                            sig2L * this.params.osc2Mix +
+                            sig3L * this.params.osc3Mix) * unisonNorm;
+                let mixR = (sig1R * this.params.osc1Mix +
+                            sig2R * this.params.osc2Mix +
+                            sig3R * this.params.osc3Mix) * unisonNorm;
 
                 // Apply envelope and filter per channel
                 mixL = moogFilter(voice, mixL * env, 'L');
