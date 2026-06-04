@@ -95,7 +95,16 @@ function moogFilter(voice, input, ch) {
     voice[`filterStage3${ch}`] += f * (Math.tanh(voice[`filterStage2${ch}`]) - Math.tanh(voice[`filterStage3${ch}`]));
     voice[`filterStage4${ch}`] += f * (Math.tanh(voice[`filterStage3${ch}`]) - Math.tanh(voice[`filterStage4${ch}`]));
 
-    return voice[`filterStage4${ch}`] * (1.0 + scaledRes * 0.8);
+    switch (voice.filterType) {
+      case 'highpass':
+        return input - voice[`filterStage4${ch}`];
+      case 'bandpass':
+        return voice[`filterStage2${ch}`];
+      case 'notch':
+        return (input - voice[`filterStage4${ch}`]) + voice[`filterStage2${ch}`] * 0.5;
+      default: // lowpass
+        return voice[`filterStage4${ch}`];
+    }
 }
 
 // ── Single voice ─────────────────────────────────────────────────
@@ -143,6 +152,7 @@ function createVoice() {
         pitchEnvReleaseRate: 0,
 
         // Filter state
+        filterType: 'lowpass',
         filterCutoff: 0.8,
         filterResonance: 0.1,
         filterStage1L: 0, filterStage2L: 0, filterStage3L: 0, filterStage4L: 0,
@@ -168,6 +178,7 @@ class ObsidianProcessor extends AudioWorkletProcessor {
         // Parameters with defaults
         this.params = {
             pitchBend: 0, // semitones, ±2
+            filterType: 'lowpass', // lowpass | highpass | bandpass | notch
             unisonVoices: 1,      // 1 to 8. 1 = unison off, normal behavior
             unisonDetune: 10,     // cents, 0 to 100
             unisonSpread: 0.8,    // stereo spread, 0.0 to 1.0
@@ -235,6 +246,7 @@ class ObsidianProcessor extends AudioWorkletProcessor {
                     if (v.active) {
                         if (data.key === 'filterCutoff') v.filterCutoff = data.value;
                         if (data.key === 'filterResonance') v.filterResonance = data.value;
+                        if (data.key === 'filterType') v.filterType = data.value;
                         if (data.key === 'osc1Fine' || data.key === 'osc1Coarse') {
                             v.osc1.phaseIncrement = calcPhaseIncrement(v.note, this.params.osc1Coarse, this.params.osc1Fine);
                         }
@@ -329,6 +341,7 @@ class ObsidianProcessor extends AudioWorkletProcessor {
 
         voice.filterCutoff = this.params.filterCutoff;
         voice.filterResonance = this.params.filterResonance;
+        voice.filterType = this.params.filterType;
         // Reset filter stages on new note to prevent clicks
         voice.filterStage1L = 0;
         voice.filterStage2L = 0;

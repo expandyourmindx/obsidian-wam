@@ -241,6 +241,15 @@
             <span class="control-value" id="velfilter-val">0.50</span>
         </div>
         <div class="control-row">
+          <span class="control-label">Filter Type</span>
+          <select id="filtertype" style="flex:1; background:#1e2630; border:1px solid #2e3d4e; color:#8a9298; font-family:'Courier New',monospace; font-size:11px; padding:4px 8px;">
+            <option value="lowpass">Lowpass</option>
+            <option value="highpass">Highpass</option>
+            <option value="bandpass">Bandpass</option>
+            <option value="notch">Notch</option>
+          </select>
+        </div>
+        <div class="control-row">
             <span class="control-label">Cutoff</span>
             <input type="range" id="cutoff" data-param="filterCutoff" min="0.01" max="1" step="0.001" value="0.8">
             <span class="control-value" id="cutoff-val">0.80</span>
@@ -627,6 +636,10 @@
 
         wireSlider('lforate',  'lfoRate',  'hz');
         wireSlider('lfodepth', 'lfoDepth', '');
+
+        document.getElementById('filtertype').addEventListener('change', (e) => {
+          obsidian?.setParam('filterType', e.target.value);
+        });
 
         document.getElementById('lfowave').addEventListener('change', (e) => {
             obsidian?.setParam('lfoWaveform', e.target.value);
