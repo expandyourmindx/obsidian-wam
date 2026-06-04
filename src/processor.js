@@ -156,6 +156,11 @@ function createVoice() {
         pitchEnvSustainLevel: 0,
         pitchEnvReleaseRate: 0,
 
+        // Portamento state
+        currentFreq: 0,    // current frequency, glides toward targetFreq
+        targetFreq: 0,     // destination frequency
+        glideRate: 0,      // semitones per sample toward target
+
         // Filter state
         filterType: 'lowpass',
         filterCutoff: 0.8,
@@ -175,6 +180,7 @@ class ObsidianProcessor extends AudioWorkletProcessor {
         for (let i = 0; i < MAX_VOICES; i++) {
             this.voices.push(createVoice());
         }
+        this.activeVoiceCount = 0;
 
         // LFO — global, not per voice
         this.lfoPhase = 0;
@@ -184,6 +190,8 @@ class ObsidianProcessor extends AudioWorkletProcessor {
         this.params = {
             pitchBend: 0, // semitones, ±2
             filterType: 'lowpass', // lowpass | highpass | bandpass | notch
+            portamentoTime: 0.0,      // seconds, 0 = instant, 0.001 to 2.0
+            portamentoMode: 'always', // 'always' | 'legato'
             osc1PulseWidth: 0.5,   // 0.1 to 0.9, 0.5 = perfect square
             osc2PulseWidth: 0.5,
             osc3PulseWidth: 0.5,
@@ -296,6 +304,7 @@ class ObsidianProcessor extends AudioWorkletProcessor {
 
     // ── Note helpers ───────────────────────────────────────────────
     noteOn(note, velocity) {
+        this.activeVoiceCount++;
         // First priority: retrigger the same note if it's already playing
         let voice = this.voices.find(v => v.active && v.note === note);
         // Second priority: find a free voice
@@ -314,13 +323,36 @@ class ObsidianProcessor extends AudioWorkletProcessor {
         voice.frequency = freq;
         voice.velocity = velocity / 127;
         voice.osc1.phase = 0;
-        voice.osc1.phaseIncrement = calcPhaseIncrement(note, this.params.osc1Coarse, this.params.osc1Fine);
-
         voice.osc2.phase = 0;
-        voice.osc2.phaseIncrement = calcPhaseIncrement(note, this.params.osc2Coarse, this.params.osc2Fine);
-
         voice.osc3.phase = 0;
-        voice.osc3.phaseIncrement = calcPhaseIncrement(note, this.params.osc3Coarse, this.params.osc3Fine);
+
+        // Portamento — determine whether to glide
+        const shouldGlide = this.params.portamentoTime > 0 && (
+          this.params.portamentoMode === 'always' ||
+          (this.params.portamentoMode === 'legato' && this.activeVoiceCount > 1)
+        );
+
+        voice.targetFreq = freq;
+
+        if (shouldGlide && voice.currentFreq > 0) {
+          // Keep current frequency and glide to target
+          // glideRate is in frequency ratio per sample
+          const glideTime = this.params.portamentoTime * sampleRate;
+          const semitoneDistance = Math.abs(
+            12 * Math.log2(freq / voice.currentFreq)
+          );
+          voice.glideRate = semitoneDistance / glideTime;
+        } else {
+          // Jump instantly to target
+          voice.currentFreq = freq;
+          voice.glideRate = 0;
+        }
+
+        // Base phase increments from current frequency
+        // Unison detune is applied as a ratio on top of this in process()
+        voice.osc1.phaseIncrement = (voice.currentFreq * Math.pow(2, (this.params.osc1Coarse + this.params.osc1Fine / 100) / 12)) / sampleRate;
+        voice.osc2.phaseIncrement = (voice.currentFreq * Math.pow(2, (this.params.osc2Coarse + this.params.osc2Fine / 100) / 12)) / sampleRate;
+        voice.osc3.phaseIncrement = (voice.currentFreq * Math.pow(2, (this.params.osc3Coarse + this.params.osc3Fine / 100) / 12)) / sampleRate;
 
         // Set up unison oscillator phase increments
         // Each copy gets a detune offset spread evenly across the detune range
@@ -388,6 +420,7 @@ class ObsidianProcessor extends AudioWorkletProcessor {
     noteOff(note) {
         const voice = this.voices.find(v => v.active && v.note === note);
         if (voice) {
+            this.activeVoiceCount = Math.max(0, this.activeVoiceCount - 1);
             voice.envStage = 4; // trigger release
             voice.filterEnvStage = 4;
             voice.pitchEnvStage = 4;
@@ -553,6 +586,45 @@ class ObsidianProcessor extends AudioWorkletProcessor {
                 const pw3 = Math.max(0.1, Math.min(0.9,
                   this.params.osc3PulseWidth + lfoValue * this.params.osc3PWMDepth * 0.4
                 ));
+
+                // Advance portamento glide
+                if (voice.glideRate > 0 && voice.currentFreq !== voice.targetFreq) {
+                  // Move current frequency toward target in semitone space
+                  const currentSemitones = 12 * Math.log2(voice.currentFreq);
+                  const targetSemitones = 12 * Math.log2(voice.targetFreq);
+                  const diff = targetSemitones - currentSemitones;
+                  const step = voice.glideRate * Math.sign(diff);
+
+                  if (Math.abs(diff) <= Math.abs(step)) {
+                    // Close enough — snap to target
+                    voice.currentFreq = voice.targetFreq;
+                    voice.glideRate = 0;
+                  } else {
+                    voice.currentFreq = Math.pow(2, (currentSemitones + step) / 12);
+                  }
+
+                  // Recalculate base phase increments from current gliding frequency
+                  voice.osc1.phaseIncrement = (voice.currentFreq * Math.pow(2, (this.params.osc1Coarse + this.params.osc1Fine / 100) / 12)) / sampleRate;
+                  voice.osc2.phaseIncrement = (voice.currentFreq * Math.pow(2, (this.params.osc2Coarse + this.params.osc2Fine / 100) / 12)) / sampleRate;
+                  voice.osc3.phaseIncrement = (voice.currentFreq * Math.pow(2, (this.params.osc3Coarse + this.params.osc3Fine / 100) / 12)) / sampleRate;
+
+                  // Recalculate unison phase increments from updated base increments
+                  const unisonCount = Math.max(1, Math.floor(this.params.unisonVoices));
+                  for (let u = 0; u < 8; u++) {
+                    if (unisonCount === 1) {
+                      voice.unisonOsc1[u].phaseIncrement = voice.osc1.phaseIncrement;
+                      voice.unisonOsc2[u].phaseIncrement = voice.osc2.phaseIncrement;
+                      voice.unisonOsc3[u].phaseIncrement = voice.osc3.phaseIncrement;
+                    } else {
+                      const spread = u / (unisonCount - 1);
+                      const detuneCents = (spread - 0.5) * 2 * this.params.unisonDetune;
+                      const detuneRatio = Math.pow(2, detuneCents / 1200);
+                      voice.unisonOsc1[u].phaseIncrement = voice.osc1.phaseIncrement * detuneRatio;
+                      voice.unisonOsc2[u].phaseIncrement = voice.osc2.phaseIncrement * detuneRatio;
+                      voice.unisonOsc3[u].phaseIncrement = voice.osc3.phaseIncrement * detuneRatio;
+                    }
+                  }
+                }
 
                 let sig1L = 0, sig1R = 0;
                 let sig2L = 0, sig2R = 0;

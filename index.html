@@ -403,6 +403,18 @@
             </select>
         </div>
         <div class="control-row">
+          <span class="control-label">Glide</span>
+          <input type="range" id="portamento" data-param="portamentoTime" min="0" max="2" step="0.001" value="0">
+          <span class="control-value" id="portamento-val">0.00s</span>
+        </div>
+        <div class="control-row">
+          <span class="control-label">Glide Mode</span>
+          <select id="portamentomode" style="flex:1; background:#1e2630; border:1px solid #2e3d4e; color:#8a9298; font-family:'Courier New',monospace; font-size:11px; padding:4px 8px;">
+            <option value="always">Always</option>
+            <option value="legato">Legato</option>
+          </select>
+        </div>
+        <div class="control-row">
             <span class="control-label">OSC 1</span>
             <button id="osc1enable" data-enabled="true" style="
                 background: #3d2468;
@@ -680,6 +692,12 @@
 
         document.getElementById('lfodest').addEventListener('change', (e) => {
             obsidian?.setParam('lfoDestination', e.target.value);
+        });
+
+        wireSlider('portamento', 'portamentoTime', 's');
+
+        document.getElementById('portamentomode').addEventListener('change', (e) => {
+          obsidian?.setParam('portamentoMode', e.target.value);
         });
 
         wireSlider('osc1pw',       'osc1PulseWidth', '');
