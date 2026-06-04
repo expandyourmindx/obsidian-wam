@@ -211,6 +211,7 @@ class ObsidianProcessor extends AudioWorkletProcessor {
             sustain: 0.7,
             release: 0.3,
             masterGain: 0.5,
+            stereoWidth: 1.0, // 0.0 = mono, 1.0 = full stereo, >1.0 = hyper-wide
             filterCutoff: 0.8,
             filterResonance: 0.1,
             filterAttack: 0.01,
@@ -711,8 +712,15 @@ class ObsidianProcessor extends AudioWorkletProcessor {
                 sampleR += mixR;
             }
 
-            left[i] = Math.tanh((sampleL / MAX_VOICES) * this.params.masterGain);
-            right[i] = Math.tanh((sampleR / MAX_VOICES) * this.params.masterGain);
+            const outL = (sampleL / MAX_VOICES) * this.params.masterGain;
+            const outR = (sampleR / MAX_VOICES) * this.params.masterGain;
+
+            // Mid-side stereo width
+            const mid  = (outL + outR) * 0.5;
+            const side = (outL - outR) * 0.5 * this.params.stereoWidth;
+
+            left[i]  = Math.tanh(mid + side);
+            right[i] = Math.tanh(mid - side);
         }
 
         return true;

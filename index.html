@@ -231,6 +231,11 @@
 ">MIDI</button>
         </div>
         <div class="control-row">
+          <span class="control-label">Width</span>
+          <input type="range" id="stereowidth" data-param="stereoWidth" min="0" max="2" step="0.01" value="1">
+          <span class="control-value" id="stereowidth-val">1.00</span>
+        </div>
+        <div class="control-row">
             <span class="control-label">Vel Amp</span>
             <input type="range" id="velamp" data-param="velocityAmpSens" min="0" max="1" step="0.01" value="1">
             <span class="control-value" id="velamp-val">1.00</span>
@@ -662,6 +667,7 @@
         wireSlider('sustain', 'sustain', '');
         wireSlider('release', 'release', 's');
         wireSlider('gain', 'masterGain', '');
+        wireSlider('stereowidth', 'stereoWidth', '');
         wireSlider('velamp',    'velocityAmpSens',    '');
         wireSlider('velfilter', 'velocityFilterSens', '');
         wireSlider('cutoff', 'filterCutoff', '');
