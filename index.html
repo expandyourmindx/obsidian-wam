@@ -822,10 +822,10 @@
 
                 const groupId = 'obsidian-test-host';
                 obsidian = new ObsidianWAM(groupId, audioContext);
-                const audioNode = await obsidian.createAudioNode();
+                await obsidian.initialize();
 
                 // Connect directly to speakers
-                initSpectrogram(audioContext, audioNode);
+                initSpectrogram(audioContext, obsidian.audioNode);
                 await initMIDI();
 
                 status.textContent = 'Ready';
