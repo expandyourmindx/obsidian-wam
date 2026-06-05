@@ -10530,6 +10530,95 @@ function Spectrogram({ analyser, W = 538, H = 52 }) {
 }
 function ObsidianPanel({ wam, analyser }) {
 	const [params, setParams] = (0, import_react.useState)(null);
+	const [presets, setPresets] = (0, import_react.useState)(() => {
+		if (typeof window === "undefined") return [{
+			name: "Init",
+			state: DEFAULT_PARAMS
+		}];
+		const savedStr = localStorage.getItem("obsidian_presets");
+		let loaded = [];
+		if (savedStr) try {
+			loaded = JSON.parse(savedStr);
+		} catch (e) {}
+		const custom = loaded.filter((p) => p && p.name && p.name !== "Init");
+		return [{
+			name: "Init",
+			state: DEFAULT_PARAMS
+		}, ...custom];
+	});
+	const [currentPresetIndex, setCurrentPresetIndex] = (0, import_react.useState)(0);
+	const [isSaving, setIsSaving] = (0, import_react.useState)(false);
+	const [newPresetName, setNewPresetName] = (0, import_react.useState)("");
+	const statesEqual = (s1, s2) => {
+		if (!s1 || !s2) return false;
+		for (const key of Object.keys(DEFAULT_PARAMS)) if (s1[key] !== s2[key]) return false;
+		return true;
+	};
+	const matchingPreset = presets.find((p) => statesEqual(params, p.state));
+	const displayName = matchingPreset ? matchingPreset.name : "Unsaved";
+	(0, import_react.useEffect)(() => {
+		if (matchingPreset) {
+			const idx = presets.indexOf(matchingPreset);
+			if (idx !== -1 && idx !== currentPresetIndex) setCurrentPresetIndex(idx);
+		}
+	}, [
+		params,
+		presets,
+		matchingPreset,
+		currentPresetIndex
+	]);
+	const loadPreset = (preset) => {
+		if (!preset) return;
+		if (wam) wam.setState(preset.state);
+		setParams({ ...preset.state });
+	};
+	const handlePrevPreset = () => {
+		let nextIdx = currentPresetIndex - 1;
+		if (nextIdx < 0) nextIdx = presets.length - 1;
+		setCurrentPresetIndex(nextIdx);
+		loadPreset(presets[nextIdx]);
+	};
+	const handleNextPreset = () => {
+		let nextIdx = currentPresetIndex + 1;
+		if (nextIdx >= presets.length) nextIdx = 0;
+		setCurrentPresetIndex(nextIdx);
+		loadPreset(presets[nextIdx]);
+	};
+	const handleConfirmSave = () => {
+		const name = newPresetName.trim();
+		if (!name) return;
+		if (name === "Init") {
+			alert("Cannot overwrite \"Init\" preset.");
+			return;
+		}
+		const existingIdx = presets.findIndex((p) => p.name === name);
+		let updatedPresets;
+		if (existingIdx !== -1) {
+			updatedPresets = [...presets];
+			updatedPresets[existingIdx] = {
+				name,
+				state: { ...params }
+			};
+		} else updatedPresets = [...presets, {
+			name,
+			state: { ...params }
+		}];
+		setPresets(updatedPresets);
+		localStorage.setItem("obsidian_presets", JSON.stringify(updatedPresets));
+		setCurrentPresetIndex(updatedPresets.findIndex((p) => p.name === name));
+		setIsSaving(false);
+		setNewPresetName("");
+	};
+	const handleDeletePreset = () => {
+		const currentPreset = presets[currentPresetIndex];
+		if (!currentPreset || currentPreset.name === "Init") return;
+		const updatedPresets = presets.filter((_, idx) => idx !== currentPresetIndex);
+		setPresets(updatedPresets);
+		localStorage.setItem("obsidian_presets", JSON.stringify(updatedPresets));
+		const nextIdx = Math.max(0, currentPresetIndex - 1);
+		setCurrentPresetIndex(nextIdx);
+		loadPreset(updatedPresets[nextIdx]);
+	};
 	(0, import_react.useEffect)(() => {
 		if (wam) setParams(wam.getState());
 		else setParams({ ...DEFAULT_PARAMS });
@@ -10618,43 +10707,269 @@ function ObsidianPanel({ wam, analyser }) {
 					alignItems: "stretch",
 					borderBottom: `1px solid ${T.borderSubtle}`
 				},
-				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					style: {
-						width: 120,
-						borderRight: `1px solid ${T.borderSubtle}`,
-						display: "flex",
-						flexDirection: "column",
-						justifyContent: "center",
-						paddingLeft: 12,
-						paddingRight: 8
-					},
-					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 						style: {
-							fontFamily: "'Righteous', sans-serif",
-							fontSize: 20,
-							lineHeight: "22px",
-							letterSpacing: "0.08em",
-							color: T.textPri
+							width: 120,
+							borderRight: `1px solid ${T.borderSubtle}`,
+							display: "flex",
+							flexDirection: "column",
+							justifyContent: "center",
+							paddingLeft: 12,
+							paddingRight: 8
 						},
-						children: "OBSIDIAN"
-					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+							style: {
+								fontFamily: "'Righteous', sans-serif",
+								fontSize: 20,
+								lineHeight: "22px",
+								letterSpacing: "0.08em",
+								color: T.textPri
+							},
+							children: "OBSIDIAN"
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+							style: {
+								fontSize: 7,
+								lineHeight: "9px",
+								letterSpacing: "0.06em",
+								color: T.textDim,
+								textTransform: "uppercase",
+								marginTop: 1
+							},
+							children: "VIRTUAL ANALOG · WAM 2.0"
+						})]
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 						style: {
-							fontSize: 7,
-							lineHeight: "9px",
-							letterSpacing: "0.06em",
-							color: T.textDim,
-							textTransform: "uppercase",
-							marginTop: 1
+							width: 220,
+							borderRight: `1px solid ${T.borderSubtle}`,
+							background: T.bgControl,
+							display: "flex",
+							flexDirection: "column",
+							justifyContent: "center",
+							padding: "0 8px",
+							fontFamily: "'Electrolize', monospace"
 						},
-						children: "VIRTUAL ANALOG · WAM 2.0"
-					})]
-				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-					style: {
-						flex: 1,
-						position: "relative"
-					},
-					children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Spectrogram, { analyser })
-				})]
+						children: isSaving ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							style: {
+								display: "flex",
+								flexDirection: "column",
+								gap: 4
+							},
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								style: {
+									fontSize: 7.5,
+									color: T.textSec,
+									letterSpacing: "0.08em",
+									textTransform: "uppercase"
+								},
+								children: "SAVE PRESET AS"
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								style: {
+									display: "flex",
+									gap: 2
+								},
+								children: [
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+										type: "text",
+										value: newPresetName,
+										onChange: (e) => setNewPresetName(e.target.value),
+										placeholder: "Preset name...",
+										style: {
+											flex: 1,
+											background: T.bgDeep,
+											border: `1px solid ${T.borderDef}`,
+											color: T.textPri,
+											fontFamily: "'Electrolize', monospace",
+											fontSize: 8.5,
+											padding: "2px 4px",
+											outline: "none",
+											borderRadius: 0,
+											transition: "none"
+										},
+										autoFocus: true,
+										onKeyDown: (e) => {
+											if (e.key === "Enter") handleConfirmSave();
+											if (e.key === "Escape") setIsSaving(false);
+										}
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+										onClick: handleConfirmSave,
+										style: {
+											background: T.redBright,
+											border: "none",
+											color: T.textPri,
+											fontFamily: "'Electrolize', monospace",
+											fontSize: 8.5,
+											padding: "2px 6px",
+											cursor: "pointer",
+											borderRadius: 0,
+											transition: "none"
+										},
+										children: "SAVE"
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+										onClick: () => setIsSaving(false),
+										style: {
+											background: T.bgElevated,
+											border: `1px solid ${T.borderDef}`,
+											color: T.textSec,
+											fontFamily: "'Electrolize', monospace",
+											fontSize: 8.5,
+											padding: "2px 6px",
+											cursor: "pointer",
+											borderRadius: 0,
+											transition: "none"
+										},
+										children: "X"
+									})
+								]
+							})]
+						}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							style: {
+								display: "flex",
+								flexDirection: "column",
+								gap: 4
+							},
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								style: {
+									display: "flex",
+									flexDirection: "row",
+									alignItems: "center",
+									justifyContent: "space-between"
+								},
+								children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+									style: {
+										fontSize: 7.5,
+										color: T.textSec,
+										letterSpacing: "0.08em",
+										textTransform: "uppercase"
+									},
+									children: "PRESET"
+								})
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								style: {
+									display: "flex",
+									alignItems: "center",
+									justifyContent: "space-between",
+									gap: 4
+								},
+								children: [
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										style: {
+											display: "flex",
+											gap: 2
+										},
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+											onClick: handlePrevPreset,
+											style: {
+												background: T.bgElevated,
+												border: `1px solid ${T.borderDef}`,
+												color: T.textPri,
+												width: 20,
+												height: 20,
+												display: "flex",
+												alignItems: "center",
+												justifyContent: "center",
+												cursor: "pointer",
+												fontFamily: "'Electrolize', monospace",
+												fontSize: 10,
+												borderRadius: 0,
+												transition: "none"
+											},
+											children: "<"
+										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+											onClick: handleNextPreset,
+											style: {
+												background: T.bgElevated,
+												border: `1px solid ${T.borderDef}`,
+												color: T.textPri,
+												width: 20,
+												height: 20,
+												display: "flex",
+												alignItems: "center",
+												justifyContent: "center",
+												cursor: "pointer",
+												fontFamily: "'Electrolize', monospace",
+												fontSize: 10,
+												borderRadius: 0,
+												transition: "none"
+											},
+											children: ">"
+										})]
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+										style: {
+											flex: 1,
+											textAlign: "center",
+											overflow: "hidden",
+											textOverflow: "ellipsis",
+											whiteSpace: "nowrap",
+											fontSize: 9.5,
+											color: displayName === "Unsaved" ? T.textSec : T.textPri,
+											border: `1px solid ${T.borderSubtle}`,
+											background: T.bgDeep,
+											height: 20,
+											lineHeight: "18px",
+											padding: "0 4px",
+											letterSpacing: "0.04em"
+										},
+										children: displayName
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										style: {
+											display: "flex",
+											gap: 2
+										},
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+											onClick: () => {
+												setNewPresetName("");
+												setIsSaving(true);
+											},
+											style: {
+												background: T.bgElevated,
+												border: `1px solid ${T.borderDef}`,
+												color: T.textPri,
+												fontSize: 8.5,
+												height: 20,
+												padding: "0 6px",
+												cursor: "pointer",
+												fontFamily: "'Electrolize', monospace",
+												borderRadius: 0,
+												transition: "none"
+											},
+											children: "SAVE"
+										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+											onClick: handleDeletePreset,
+											disabled: matchingPreset && matchingPreset.name === "Init",
+											style: {
+												background: T.bgElevated,
+												border: `1px solid ${T.borderDef}`,
+												color: matchingPreset && matchingPreset.name === "Init" ? T.textDim : T.textRed,
+												fontSize: 8.5,
+												height: 20,
+												padding: "0 6px",
+												cursor: "pointer",
+												opacity: matchingPreset && matchingPreset.name === "Init" ? .5 : 1,
+												fontFamily: "'Electrolize', monospace",
+												borderRadius: 0,
+												transition: "none"
+											},
+											children: "DEL"
+										})]
+									})
+								]
+							})]
+						})
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+						style: {
+							flex: 1,
+							position: "relative"
+						},
+						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Spectrogram, { analyser })
+					})
+				]
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 				style: {

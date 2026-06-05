@@ -506,6 +506,110 @@ function Spectrogram({ analyser, W = 538, H = 52 }) {
 export default function ObsidianPanel({ wam, analyser }) {
   const [params, setParams] = useState(null);
 
+  const [presets, setPresets] = useState(() => {
+    if (typeof window === 'undefined') return [{ name: 'Init', state: DEFAULT_PARAMS }];
+    const savedStr = localStorage.getItem('obsidian_presets');
+    let loaded = [];
+    if (savedStr) {
+      try {
+        loaded = JSON.parse(savedStr);
+      } catch (e) {}
+    }
+    const custom = loaded.filter(p => p && p.name && p.name !== 'Init');
+    return [{ name: 'Init', state: DEFAULT_PARAMS }, ...custom];
+  });
+  
+  const [currentPresetIndex, setCurrentPresetIndex] = useState(0);
+  const [isSaving, setIsSaving] = useState(false);
+  const [newPresetName, setNewPresetName] = useState('');
+
+  const statesEqual = (s1, s2) => {
+    if (!s1 || !s2) return false;
+    for (const key of Object.keys(DEFAULT_PARAMS)) {
+      if (s1[key] !== s2[key]) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const matchingPreset = presets.find(p => statesEqual(params, p.state));
+  const displayName = matchingPreset ? matchingPreset.name : "Unsaved";
+
+  useEffect(() => {
+    if (matchingPreset) {
+      const idx = presets.indexOf(matchingPreset);
+      if (idx !== -1 && idx !== currentPresetIndex) {
+        setCurrentPresetIndex(idx);
+      }
+    }
+  }, [params, presets, matchingPreset, currentPresetIndex]);
+
+  const loadPreset = (preset) => {
+    if (!preset) return;
+    if (wam) {
+      wam.setState(preset.state);
+    }
+    setParams({ ...preset.state });
+  };
+
+  const handlePrevPreset = () => {
+    let nextIdx = currentPresetIndex - 1;
+    if (nextIdx < 0) {
+      nextIdx = presets.length - 1;
+    }
+    setCurrentPresetIndex(nextIdx);
+    loadPreset(presets[nextIdx]);
+  };
+
+  const handleNextPreset = () => {
+    let nextIdx = currentPresetIndex + 1;
+    if (nextIdx >= presets.length) {
+      nextIdx = 0;
+    }
+    setCurrentPresetIndex(nextIdx);
+    loadPreset(presets[nextIdx]);
+  };
+
+  const handleConfirmSave = () => {
+    const name = newPresetName.trim();
+    if (!name) return;
+    if (name === 'Init') {
+      alert('Cannot overwrite "Init" preset.');
+      return;
+    }
+
+    const existingIdx = presets.findIndex(p => p.name === name);
+    let updatedPresets;
+    if (existingIdx !== -1) {
+      updatedPresets = [...presets];
+      updatedPresets[existingIdx] = { name, state: { ...params } };
+    } else {
+      updatedPresets = [...presets, { name, state: { ...params } }];
+    }
+
+    setPresets(updatedPresets);
+    localStorage.setItem('obsidian_presets', JSON.stringify(updatedPresets));
+
+    const newIdx = updatedPresets.findIndex(p => p.name === name);
+    setCurrentPresetIndex(newIdx);
+    setIsSaving(false);
+    setNewPresetName('');
+  };
+
+  const handleDeletePreset = () => {
+    const currentPreset = presets[currentPresetIndex];
+    if (!currentPreset || currentPreset.name === 'Init') return;
+
+    const updatedPresets = presets.filter((_, idx) => idx !== currentPresetIndex);
+    setPresets(updatedPresets);
+    localStorage.setItem('obsidian_presets', JSON.stringify(updatedPresets));
+
+    const nextIdx = Math.max(0, currentPresetIndex - 1);
+    setCurrentPresetIndex(nextIdx);
+    loadPreset(updatedPresets[nextIdx]);
+  };
+
   // Load parameter values on mount
   useEffect(() => {
     if (wam) {
@@ -657,6 +761,201 @@ export default function ObsidianPanel({ wam, analyser }) {
               VIRTUAL ANALOG · WAM 2.0
             </div>
           </div>
+
+          {/* Preset Strip */}
+          <div style={{
+            width: 220,
+            borderRight: `1px solid ${T.borderSubtle}`,
+            background: T.bgControl,
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            padding: '0 8px',
+            fontFamily: "'Electrolize', monospace",
+          }}>
+            {isSaving ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div style={{ fontSize: 7.5, color: T.textSec, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                  SAVE PRESET AS
+                </div>
+                <div style={{ display: 'flex', gap: 2 }}>
+                  <input
+                    type="text"
+                    value={newPresetName}
+                    onChange={e => setNewPresetName(e.target.value)}
+                    placeholder="Preset name..."
+                    style={{
+                      flex: 1,
+                      background: T.bgDeep,
+                      border: `1px solid ${T.borderDef}`,
+                      color: T.textPri,
+                      fontFamily: "'Electrolize', monospace",
+                      fontSize: 8.5,
+                      padding: '2px 4px',
+                      outline: 'none',
+                      borderRadius: 0,
+                      transition: 'none',
+                    }}
+                    autoFocus
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') handleConfirmSave();
+                      if (e.key === 'Escape') setIsSaving(false);
+                    }}
+                  />
+                  <button
+                    onClick={handleConfirmSave}
+                    style={{
+                      background: T.redBright,
+                      border: 'none',
+                      color: T.textPri,
+                      fontFamily: "'Electrolize', monospace",
+                      fontSize: 8.5,
+                      padding: '2px 6px',
+                      cursor: 'pointer',
+                      borderRadius: 0,
+                      transition: 'none',
+                    }}
+                  >
+                    SAVE
+                  </button>
+                  <button
+                    onClick={() => setIsSaving(false)}
+                    style={{
+                      background: T.bgElevated,
+                      border: `1px solid ${T.borderDef}`,
+                      color: T.textSec,
+                      fontFamily: "'Electrolize', monospace",
+                      fontSize: 8.5,
+                      padding: '2px 6px',
+                      cursor: 'pointer',
+                      borderRadius: 0,
+                      transition: 'none',
+                    }}
+                  >
+                    X
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}>
+                  <span style={{ fontSize: 7.5, color: T.textSec, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                    PRESET
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+                  <div style={{ display: 'flex', gap: 2 }}>
+                    <button
+                      onClick={handlePrevPreset}
+                      style={{
+                        background: T.bgElevated,
+                        border: `1px solid ${T.borderDef}`,
+                        color: T.textPri,
+                        width: 20,
+                        height: 20,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        fontFamily: "'Electrolize', monospace",
+                        fontSize: 10,
+                        borderRadius: 0,
+                        transition: 'none',
+                      }}
+                    >
+                      &lt;
+                    </button>
+                    <button
+                      onClick={handleNextPreset}
+                      style={{
+                        background: T.bgElevated,
+                        border: `1px solid ${T.borderDef}`,
+                        color: T.textPri,
+                        width: 20,
+                        height: 20,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        fontFamily: "'Electrolize', monospace",
+                        fontSize: 10,
+                        borderRadius: 0,
+                        transition: 'none',
+                      }}
+                    >
+                      &gt;
+                    </button>
+                  </div>
+
+                  <div style={{
+                    flex: 1,
+                    textAlign: 'center',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    fontSize: 9.5,
+                    color: displayName === 'Unsaved' ? T.textSec : T.textPri,
+                    border: `1px solid ${T.borderSubtle}`,
+                    background: T.bgDeep,
+                    height: 20,
+                    lineHeight: '18px',
+                    padding: '0 4px',
+                    letterSpacing: '0.04em',
+                  }}>
+                    {displayName}
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 2 }}>
+                    <button
+                      onClick={() => {
+                        setNewPresetName('');
+                        setIsSaving(true);
+                      }}
+                      style={{
+                        background: T.bgElevated,
+                        border: `1px solid ${T.borderDef}`,
+                        color: T.textPri,
+                        fontSize: 8.5,
+                        height: 20,
+                        padding: '0 6px',
+                        cursor: 'pointer',
+                        fontFamily: "'Electrolize', monospace",
+                        borderRadius: 0,
+                        transition: 'none',
+                      }}
+                    >
+                      SAVE
+                    </button>
+                    <button
+                      onClick={handleDeletePreset}
+                      disabled={matchingPreset && matchingPreset.name === 'Init'}
+                      style={{
+                        background: T.bgElevated,
+                        border: `1px solid ${T.borderDef}`,
+                        color: (matchingPreset && matchingPreset.name === 'Init') ? T.textDim : T.textRed,
+                        fontSize: 8.5,
+                        height: 20,
+                        padding: '0 6px',
+                        cursor: 'pointer',
+                        opacity: (matchingPreset && matchingPreset.name === 'Init') ? 0.5 : 1,
+                        fontFamily: "'Electrolize', monospace",
+                        borderRadius: 0,
+                        transition: 'none',
+                      }}
+                    >
+                      DEL
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Spectrogram Canvas */}
           <div style={{ flex: 1, position: 'relative' }}>
             <Spectrogram analyser={analyser} />
