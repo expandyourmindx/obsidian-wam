@@ -10583,6 +10583,37 @@ function ObsidianPanel({ wam, analyser }) {
 	const [folderName, setFolderName] = (0, import_react.useState)("");
 	const [syncStatus, setSyncStatus] = (0, import_react.useState)("");
 	const dirHandleRef = (0, import_react.useRef)(null);
+	const wrapperRef = (0, import_react.useRef)(null);
+	const innerRef = (0, import_react.useRef)(null);
+	const [containerWidth, setContainerWidth] = (0, import_react.useState)(660);
+	const [innerHeight, setInnerHeight] = (0, import_react.useState)(0);
+	(0, import_react.useEffect)(() => {
+		const wrapper = wrapperRef.current;
+		if (!wrapper) return;
+		const observer = new ResizeObserver((entries) => {
+			if (!entries || entries.length === 0) return;
+			const width = entries[0].contentRect.width;
+			if (width > 0) setContainerWidth(width);
+		});
+		observer.observe(wrapper);
+		return () => observer.disconnect();
+	}, []);
+	(0, import_react.useEffect)(() => {
+		const inner = innerRef.current;
+		if (!inner) return;
+		const observer = new ResizeObserver((entries) => {
+			if (!entries || entries.length === 0) return;
+			const height = entries[0].contentRect.height;
+			if (height > 0) setInnerHeight(height);
+		});
+		observer.observe(inner);
+		return () => observer.disconnect();
+	}, []);
+	const scale = containerWidth < 660 ? containerWidth / 660 : 1;
+	const layoutWidth = containerWidth < 660 ? 660 : Math.min(1100, containerWidth);
+	let widthMode = "wide";
+	if (containerWidth < 600) widthMode = "narrow";
+	else if (containerWidth < 900) widthMode = "medium";
 	const isSupported = typeof window !== "undefined" && !!window.showDirectoryPicker;
 	const statesEqual = (s1, s2) => {
 		if (!s1 || !s2) return false;
@@ -10847,320 +10878,369 @@ function ObsidianPanel({ wam, analyser }) {
           background: ${T.bgSurface};
           color: ${T.textPri};
         }
-      ` }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-		className: "obs-panel",
+      ` }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+		ref: wrapperRef,
 		style: {
-			width: 660,
-			background: T.bgMid,
-			fontFamily: "'Electrolize', monospace",
-			color: T.textPri,
-			display: "flex",
-			flexDirection: "column",
-			gap: 0
+			width: "100%",
+			height: scale < 1 && innerHeight > 0 ? `${innerHeight * scale}px` : "auto",
+			overflow: "hidden",
+			position: "relative"
 		},
-		children: [
-			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				style: {
-					height: 52,
-					background: T.bgDeep,
-					display: "flex",
-					flexDirection: "row",
-					alignItems: "stretch",
-					borderBottom: `1px solid ${T.borderSubtle}`
-				},
-				children: [
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						style: {
-							width: 120,
-							borderRight: `1px solid ${T.borderSubtle}`,
-							display: "flex",
-							flexDirection: "column",
-							justifyContent: "center",
-							paddingLeft: 12,
-							paddingRight: 8
-						},
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+		children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+			ref: innerRef,
+			className: "obs-panel",
+			style: {
+				width: layoutWidth,
+				background: T.bgMid,
+				fontFamily: "'Electrolize', monospace",
+				color: T.textPri,
+				display: "flex",
+				flexDirection: "column",
+				gap: 0,
+				transform: scale < 1 ? `scale(${scale})` : "none",
+				transformOrigin: "top left"
+			},
+			children: [
+				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					style: {
+						height: 52,
+						background: T.bgDeep,
+						display: "flex",
+						flexDirection: "row",
+						alignItems: "stretch",
+						borderBottom: `1px solid ${T.borderSubtle}`
+					},
+					children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 							style: {
-								fontFamily: "'Righteous', sans-serif",
-								fontSize: 20,
-								lineHeight: "22px",
-								letterSpacing: "0.08em",
-								color: T.textPri
-							},
-							children: "OBSIDIAN"
-						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-							style: {
-								fontSize: 7,
-								lineHeight: "9px",
-								letterSpacing: "0.06em",
-								color: T.textDim,
-								textTransform: "uppercase",
-								marginTop: 1
-							},
-							children: "VIRTUAL ANALOG · WAM 2.0"
-						})]
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						style: {
-							width: 260,
-							borderRight: `1px solid ${T.borderSubtle}`,
-							background: T.bgControl,
-							display: "flex",
-							flexDirection: "column",
-							justifyContent: "center",
-							padding: "0 8px",
-							fontFamily: "'Electrolize', monospace",
-							gap: 4
-						},
-						children: [isSaving ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							style: {
+								width: 120,
+								borderRight: `1px solid ${T.borderSubtle}`,
 								display: "flex",
-								gap: 2
+								flexDirection: "column",
+								justifyContent: "center",
+								paddingLeft: 12,
+								paddingRight: 8
 							},
-							children: [
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-									type: "text",
-									value: newPresetName,
-									onChange: (e) => setNewPresetName(e.target.value),
-									placeholder: "Preset name...",
-									style: {
-										flex: 1,
-										background: T.bgDeep,
-										border: `1px solid ${T.borderDef}`,
-										color: T.textPri,
-										fontFamily: "'Electrolize', monospace",
-										fontSize: 8.5,
-										padding: "2px 4px",
-										outline: "none",
-										borderRadius: 0,
-										transition: "none",
-										height: 20
-									},
-									autoFocus: true,
-									onKeyDown: (e) => {
-										if (e.key === "Enter") handleConfirmSave();
-										if (e.key === "Escape") setIsSaving(false);
-									}
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-									onClick: handleConfirmSave,
-									style: {
-										background: T.redBright,
-										border: "none",
-										color: T.textPri,
-										fontFamily: "'Electrolize', monospace",
-										fontSize: 8.5,
-										padding: "0 6px",
-										cursor: "pointer",
-										borderRadius: 0,
-										transition: "none",
-										height: 20
-									},
-									children: "SAVE"
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-									onClick: () => setIsSaving(false),
-									style: {
-										background: T.bgElevated,
-										border: `1px solid ${T.borderDef}`,
-										color: T.textSec,
-										fontFamily: "'Electrolize', monospace",
-										fontSize: 8.5,
-										padding: "0 6px",
-										cursor: "pointer",
-										borderRadius: 0,
-										transition: "none",
-										height: 20
-									},
-									children: "X"
-								})
-							]
-						}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								style: {
+									fontFamily: "'Righteous', sans-serif",
+									fontSize: 20,
+									lineHeight: "22px",
+									letterSpacing: "0.08em",
+									color: T.textPri
+								},
+								children: "OBSIDIAN"
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								style: {
+									fontSize: 7,
+									lineHeight: "9px",
+									letterSpacing: "0.06em",
+									color: T.textDim,
+									textTransform: "uppercase",
+									marginTop: 1
+								},
+								children: "VIRTUAL ANALOG · WAM 2.0"
+							})]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 							style: {
+								width: 260,
+								borderRight: `1px solid ${T.borderSubtle}`,
+								background: T.bgControl,
 								display: "flex",
-								alignItems: "center",
-								justifyContent: "space-between",
+								flexDirection: "column",
+								justifyContent: "center",
+								padding: "0 8px",
+								fontFamily: "'Electrolize', monospace",
 								gap: 4
 							},
-							children: [
-								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									style: {
-										display: "flex",
-										gap: 2
-									},
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-										onClick: handlePrevPreset,
+							children: [isSaving ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								style: {
+									display: "flex",
+									gap: 2
+								},
+								children: [
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+										type: "text",
+										value: newPresetName,
+										onChange: (e) => setNewPresetName(e.target.value),
+										placeholder: "Preset name...",
 										style: {
-											background: T.bgElevated,
+											flex: 1,
+											background: T.bgDeep,
 											border: `1px solid ${T.borderDef}`,
 											color: T.textPri,
-											width: 20,
-											height: 20,
-											display: "flex",
-											alignItems: "center",
-											justifyContent: "center",
-											cursor: "pointer",
 											fontFamily: "'Electrolize', monospace",
-											fontSize: 10,
-											borderRadius: 0,
-											transition: "none"
-										},
-										children: "<"
-									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-										onClick: handleNextPreset,
-										style: {
-											background: T.bgElevated,
-											border: `1px solid ${T.borderDef}`,
-											color: T.textPri,
-											width: 20,
-											height: 20,
-											display: "flex",
-											alignItems: "center",
-											justifyContent: "center",
-											cursor: "pointer",
-											fontFamily: "'Electrolize', monospace",
-											fontSize: 10,
-											borderRadius: 0,
-											transition: "none"
-										},
-										children: ">"
-									})]
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-									style: {
-										flex: 1,
-										textAlign: "center",
-										overflow: "hidden",
-										textOverflow: "ellipsis",
-										whiteSpace: "nowrap",
-										fontSize: 9.5,
-										color: displayName === "Unsaved" ? T.textSec : T.textPri,
-										border: `1px solid ${T.borderSubtle}`,
-										background: T.bgDeep,
-										height: 20,
-										lineHeight: "18px",
-										padding: "0 4px",
-										letterSpacing: "0.04em"
-									},
-									children: displayName
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									style: {
-										display: "flex",
-										gap: 2
-									},
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-										onClick: () => {
-											setNewPresetName("");
-											setIsSaving(true);
-										},
-										style: {
-											background: T.bgElevated,
-											border: `1px solid ${T.borderDef}`,
-											color: T.textPri,
 											fontSize: 8.5,
-											height: 20,
+											padding: "2px 4px",
+											outline: "none",
+											borderRadius: 0,
+											transition: "none",
+											height: 20
+										},
+										autoFocus: true,
+										onKeyDown: (e) => {
+											if (e.key === "Enter") handleConfirmSave();
+											if (e.key === "Escape") setIsSaving(false);
+										}
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+										onClick: handleConfirmSave,
+										style: {
+											background: T.redBright,
+											border: "none",
+											color: T.textPri,
+											fontFamily: "'Electrolize', monospace",
+											fontSize: 8.5,
 											padding: "0 6px",
 											cursor: "pointer",
-											fontFamily: "'Electrolize', monospace",
 											borderRadius: 0,
-											transition: "none"
+											transition: "none",
+											height: 20
 										},
 										children: "SAVE"
-									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-										onClick: handleDeletePreset,
-										disabled: matchingPreset && matchingPreset.name === "Init",
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+										onClick: () => setIsSaving(false),
 										style: {
 											background: T.bgElevated,
 											border: `1px solid ${T.borderDef}`,
-											color: matchingPreset && matchingPreset.name === "Init" ? T.textDim : T.textRed,
+											color: T.textSec,
+											fontFamily: "'Electrolize', monospace",
 											fontSize: 8.5,
-											height: 20,
 											padding: "0 6px",
 											cursor: "pointer",
-											opacity: matchingPreset && matchingPreset.name === "Init" ? .5 : 1,
-											fontFamily: "'Electrolize', monospace",
 											borderRadius: 0,
-											transition: "none"
+											transition: "none",
+											height: 20
 										},
-										children: "DEL"
-									})]
-								})
-							]
-						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							style: {
-								display: "flex",
-								alignItems: "center",
-								justifyContent: "space-between",
-								height: 20
-							},
-							children: [
-								syncStatus === "unsupported" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-									style: {
-										fontSize: 7.5,
-										color: T.textSec,
-										letterSpacing: "0.02em",
-										whiteSpace: "nowrap"
-									},
-									children: "Folder sync unavailable in this browser"
-								}),
-								syncStatus !== "unsupported" && !folderName && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-									onClick: handleSetFolder,
-									style: {
-										background: T.bgElevated,
-										border: `1px solid ${T.borderDef}`,
-										color: T.textPri,
-										fontFamily: "'Electrolize', monospace",
-										fontSize: 8,
-										height: 18,
-										padding: "0 8px",
-										cursor: "pointer",
-										borderRadius: 0,
-										transition: "none",
-										width: "100%"
-									},
-									children: "SET PRESETS FOLDER"
-								}),
-								syncStatus === "unauthorized" && folderName && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									style: {
-										display: "flex",
-										alignItems: "center",
-										justifyContent: "space-between",
-										width: "100%",
-										gap: 4
-									},
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-										title: folderName,
-										style: {
-											fontSize: 8,
-											color: T.textRed,
-											overflow: "hidden",
-											textOverflow: "ellipsis",
-											whiteSpace: "nowrap",
-											flex: 1,
-											textAlign: "left"
-										},
-										children: ["🔑 ", folderName]
-									}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										children: "X"
+									})
+								]
+							}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								style: {
+									display: "flex",
+									alignItems: "center",
+									justifyContent: "space-between",
+									gap: 4
+								},
+								children: [
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 										style: {
 											display: "flex",
 											gap: 2
 										},
 										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-											onClick: handleAuthorize,
+											onClick: handlePrevPreset,
 											style: {
-												background: T.redBright,
-												border: "none",
+												background: T.bgElevated,
+												border: `1px solid ${T.borderDef}`,
 												color: T.textPri,
-												fontFamily: "'Electrolize', monospace",
-												fontSize: 8,
-												height: 18,
-												padding: "0 6px",
+												width: 20,
+												height: 20,
+												display: "flex",
+												alignItems: "center",
+												justifyContent: "center",
 												cursor: "pointer",
+												fontFamily: "'Electrolize', monospace",
+												fontSize: 10,
 												borderRadius: 0,
 												transition: "none"
 											},
-											children: "AUTH"
+											children: "<"
+										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+											onClick: handleNextPreset,
+											style: {
+												background: T.bgElevated,
+												border: `1px solid ${T.borderDef}`,
+												color: T.textPri,
+												width: 20,
+												height: 20,
+												display: "flex",
+												alignItems: "center",
+												justifyContent: "center",
+												cursor: "pointer",
+												fontFamily: "'Electrolize', monospace",
+												fontSize: 10,
+												borderRadius: 0,
+												transition: "none"
+											},
+											children: ">"
+										})]
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+										style: {
+											flex: 1,
+											textAlign: "center",
+											overflow: "hidden",
+											textOverflow: "ellipsis",
+											whiteSpace: "nowrap",
+											fontSize: 9.5,
+											color: displayName === "Unsaved" ? T.textSec : T.textPri,
+											border: `1px solid ${T.borderSubtle}`,
+											background: T.bgDeep,
+											height: 20,
+											lineHeight: "18px",
+											padding: "0 4px",
+											letterSpacing: "0.04em"
+										},
+										children: displayName
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										style: {
+											display: "flex",
+											gap: 2
+										},
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+											onClick: () => {
+												setNewPresetName("");
+												setIsSaving(true);
+											},
+											style: {
+												background: T.bgElevated,
+												border: `1px solid ${T.borderDef}`,
+												color: T.textPri,
+												fontSize: 8.5,
+												height: 20,
+												padding: "0 6px",
+												cursor: "pointer",
+												fontFamily: "'Electrolize', monospace",
+												borderRadius: 0,
+												transition: "none"
+											},
+											children: "SAVE"
+										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+											onClick: handleDeletePreset,
+											disabled: matchingPreset && matchingPreset.name === "Init",
+											style: {
+												background: T.bgElevated,
+												border: `1px solid ${T.borderDef}`,
+												color: matchingPreset && matchingPreset.name === "Init" ? T.textDim : T.textRed,
+												fontSize: 8.5,
+												height: 20,
+												padding: "0 6px",
+												cursor: "pointer",
+												opacity: matchingPreset && matchingPreset.name === "Init" ? .5 : 1,
+												fontFamily: "'Electrolize', monospace",
+												borderRadius: 0,
+												transition: "none"
+											},
+											children: "DEL"
+										})]
+									})
+								]
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								style: {
+									display: "flex",
+									alignItems: "center",
+									justifyContent: "space-between",
+									height: 20
+								},
+								children: [
+									syncStatus === "unsupported" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+										style: {
+											fontSize: 7.5,
+											color: T.textSec,
+											letterSpacing: "0.02em",
+											whiteSpace: "nowrap"
+										},
+										children: "Folder sync unavailable in this browser"
+									}),
+									syncStatus !== "unsupported" && !folderName && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+										onClick: handleSetFolder,
+										style: {
+											background: T.bgElevated,
+											border: `1px solid ${T.borderDef}`,
+											color: T.textPri,
+											fontFamily: "'Electrolize', monospace",
+											fontSize: 8,
+											height: 18,
+											padding: "0 8px",
+											cursor: "pointer",
+											borderRadius: 0,
+											transition: "none",
+											width: "100%"
+										},
+										children: "SET PRESETS FOLDER"
+									}),
+									syncStatus === "unauthorized" && folderName && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										style: {
+											display: "flex",
+											alignItems: "center",
+											justifyContent: "space-between",
+											width: "100%",
+											gap: 4
+										},
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+											title: folderName,
+											style: {
+												fontSize: 8,
+												color: T.textRed,
+												overflow: "hidden",
+												textOverflow: "ellipsis",
+												whiteSpace: "nowrap",
+												flex: 1,
+												textAlign: "left"
+											},
+											children: ["🔑 ", folderName]
+										}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											style: {
+												display: "flex",
+												gap: 2
+											},
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+												onClick: handleAuthorize,
+												style: {
+													background: T.redBright,
+													border: "none",
+													color: T.textPri,
+													fontFamily: "'Electrolize', monospace",
+													fontSize: 8,
+													height: 18,
+													padding: "0 6px",
+													cursor: "pointer",
+													borderRadius: 0,
+													transition: "none"
+												},
+												children: "AUTH"
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+												onClick: handleSetFolder,
+												style: {
+													background: T.bgElevated,
+													border: `1px solid ${T.borderDef}`,
+													color: T.textSec,
+													fontFamily: "'Electrolize', monospace",
+													fontSize: 8,
+													height: 18,
+													padding: "0 6px",
+													cursor: "pointer",
+													borderRadius: 0,
+													transition: "none"
+												},
+												children: "CHANGE"
+											})]
+										})]
+									}),
+									syncStatus === "active" && folderName && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										style: {
+											display: "flex",
+											alignItems: "center",
+											justifyContent: "space-between",
+											width: "100%",
+											gap: 4
+										},
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+											title: folderName,
+											style: {
+												fontSize: 8,
+												color: T.textLabel,
+												overflow: "hidden",
+												textOverflow: "ellipsis",
+												whiteSpace: "nowrap",
+												flex: 1,
+												textAlign: "left"
+											},
+											children: ["📁 ", folderName]
 										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 											onClick: handleSetFolder,
 											style: {
@@ -11177,780 +11257,888 @@ function ObsidianPanel({ wam, analyser }) {
 											},
 											children: "CHANGE"
 										})]
-									})]
-								}),
-								syncStatus === "active" && folderName && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									})
+								]
+							})]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+							style: {
+								flex: 1,
+								position: "relative"
+							},
+							children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Spectrogram, {
+								analyser,
+								W: layoutWidth - 380
+							})
+						})
+					]
+				}),
+				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+					style: {
+						display: "flex",
+						flexDirection: widthMode === "narrow" ? "column" : "row",
+						background: T.borderSubtle,
+						gap: 1,
+						borderBottom: `1px solid ${T.borderSubtle}`
+					},
+					children: [
+						1,
+						2,
+						3
+					].map((num) => {
+						const enabledKey = `osc${num}Enabled`;
+						const waveKey = `osc${num}Waveform`;
+						const mixKey = `osc${num}Mix`;
+						const panKey = `osc${num}Pan`;
+						const coarseKey = `osc${num}Coarse`;
+						const fineKey = `osc${num}Fine`;
+						const pwKey = `osc${num}PulseWidth`;
+						const pwmKey = `osc${num}PWMDepth`;
+						const isEnabled = params[enabledKey];
+						return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							style: {
+								flex: 1,
+								background: T.bgSurface,
+								padding: "12px 14px",
+								display: "flex",
+								flexDirection: "column",
+								gap: 12
+							},
+							children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 									style: {
 										display: "flex",
-										alignItems: "center",
 										justifyContent: "space-between",
-										width: "100%",
-										gap: 4
+										alignItems: "center"
 									},
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-										title: folderName,
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 										style: {
-											fontSize: 8,
-											color: T.textLabel,
-											overflow: "hidden",
-											textOverflow: "ellipsis",
-											whiteSpace: "nowrap",
-											flex: 1,
-											textAlign: "left"
-										},
-										children: ["📁 ", folderName]
-									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-										onClick: handleSetFolder,
-										style: {
-											background: T.bgElevated,
-											border: `1px solid ${T.borderDef}`,
+											fontSize: 10,
+											letterSpacing: "0.18em",
 											color: T.textSec,
-											fontFamily: "'Electrolize', monospace",
-											fontSize: 8,
-											height: 18,
-											padding: "0 6px",
-											cursor: "pointer",
-											borderRadius: 0,
-											transition: "none"
+											borderLeft: `2px solid ${T.redPrimary}`,
+											paddingLeft: 8
 										},
-										children: "CHANGE"
+										children: ["OSC ", num]
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										style: {
+											display: "flex",
+											alignItems: "center",
+											gap: 6
+										},
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+											onClick: () => updateParam(enabledKey, !isEnabled),
+											style: {
+												width: 14,
+												height: 14,
+												cursor: "pointer",
+												border: `1px solid ${isEnabled ? T.borderActive : T.borderDef}`,
+												background: isEnabled ? T.redBright : T.bgDeep
+											}
+										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+											style: {
+												fontSize: 8,
+												color: isEnabled ? T.textPri : T.textDim,
+												letterSpacing: "0.04em"
+											},
+											children: "ON"
+										})]
+									})]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+									style: {
+										display: "flex",
+										gap: 4,
+										justifyContent: "space-between"
+									},
+									children: [
+										"saw",
+										"square",
+										"triangle",
+										"sine"
+									].map((w) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)(WaveMini, {
+										wave: w,
+										active: params[waveKey] === w,
+										onClick: () => updateParam(waveKey, w),
+										W: 42,
+										H: 16
+									}, w))
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									style: {
+										display: "flex",
+										justifyContent: "space-between",
+										alignItems: "center"
+									},
+									children: [
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
+											size: "md",
+											value: getKnobVal(mixKey),
+											onChange: (v) => updateParam(mixKey, v),
+											onReset: () => resetParam(mixKey),
+											label: "Mix"
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
+											size: "sm",
+											value: getKnobVal(panKey),
+											onChange: (v) => updateParam(panKey, v),
+											onReset: () => resetParam(panKey),
+											label: "Pan",
+											fmt: (v) => `${Math.round((v - .5) * 200)}%`
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
+											size: "sm",
+											value: getKnobVal(coarseKey),
+											onChange: (v) => updateParam(coarseKey, v),
+											onReset: () => resetParam(coarseKey),
+											label: "Coarse",
+											fmt: (v) => `${Math.round((v - .5) * 48)} st`
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
+											size: "sm",
+											value: getKnobVal(fineKey),
+											onChange: (v) => updateParam(fineKey, v),
+											onReset: () => resetParam(fineKey),
+											label: "Fine",
+											fmt: (v) => `${Math.round((v - .5) * 200)} c`
+										})
+									]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									style: {
+										display: "flex",
+										gap: 14,
+										alignItems: "center"
+									},
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
+										size: "sm",
+										value: getKnobVal(pwKey),
+										onChange: (v) => updateParam(pwKey, v),
+										onReset: () => resetParam(pwKey),
+										label: "PW",
+										fmt: (v) => `${Math.round(v * 100)}%`
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
+										size: "sm",
+										value: getKnobVal(pwmKey),
+										onChange: (v) => updateParam(pwmKey, v),
+										onReset: () => resetParam(pwmKey),
+										label: "PWM",
+										fmt: (v) => `${Math.round(v * 100)}%`
 									})]
 								})
 							]
-						})]
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-						style: {
-							flex: 1,
-							position: "relative"
-						},
-						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Spectrogram, { analyser })
+						}, num);
 					})
-				]
-			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-				style: {
-					display: "flex",
-					flexDirection: "row",
-					background: T.borderSubtle,
-					gap: 1,
-					borderBottom: `1px solid ${T.borderSubtle}`
-				},
-				children: [
-					1,
-					2,
-					3
-				].map((num) => {
-					const enabledKey = `osc${num}Enabled`;
-					const waveKey = `osc${num}Waveform`;
-					const mixKey = `osc${num}Mix`;
-					const panKey = `osc${num}Pan`;
-					const coarseKey = `osc${num}Coarse`;
-					const fineKey = `osc${num}Fine`;
-					const pwKey = `osc${num}PulseWidth`;
-					const pwmKey = `osc${num}PWMDepth`;
-					const isEnabled = params[enabledKey];
-					return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						style: {
-							flex: 1,
-							background: T.bgSurface,
-							padding: "12px 14px",
-							display: "flex",
-							flexDirection: "column",
-							gap: 12
-						},
-						children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				}),
+				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					style: {
+						background: T.bgSurface,
+						borderLeft: `3px solid ${T.redPrimary}`,
+						padding: "12px 14px",
+						display: "flex",
+						flexDirection: "column",
+						gap: 8,
+						borderBottom: `1px solid ${T.borderSubtle}`
+					},
+					children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+							style: {
+								fontSize: 10,
+								letterSpacing: "0.18em",
+								color: T.textSec,
+								borderLeft: `2px solid ${T.redPrimary}`,
+								paddingLeft: 8,
+								marginBottom: 4
+							},
+							children: "FILTER"
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FilterDisplay, {
+							W: layoutWidth - 28,
+							H: 80,
+							cutoff: getKnobVal("filterCutoff"),
+							res: getKnobVal("filterResonance")
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+							style: {
+								display: "flex",
+								justifyContent: "space-between",
+								paddingLeft: 2,
+								paddingRight: 2,
+								marginTop: -4,
+								marginBottom: 6
+							},
+							children: [
+								"20Hz",
+								"100",
+								"500",
+								"2k",
+								"8k",
+								"20kHz"
+							].map((label) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 								style: {
-									display: "flex",
-									justifyContent: "space-between",
-									alignItems: "center"
+									fontSize: 7.5,
+									color: T.textDim,
+									letterSpacing: "0.04em"
 								},
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									style: {
-										fontSize: 10,
-										letterSpacing: "0.18em",
-										color: T.textSec,
-										borderLeft: `2px solid ${T.redPrimary}`,
-										paddingLeft: 8
-									},
-									children: ["OSC ", num]
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								children: label
+							}, label))
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							style: {
+								display: "flex",
+								flexDirection: "row",
+								alignItems: "center",
+								justifyContent: "space-between"
+							},
+							children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 									style: {
 										display: "flex",
-										alignItems: "center",
-										gap: 6
+										gap: 14,
+										alignItems: "center"
 									},
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-										onClick: () => updateParam(enabledKey, !isEnabled),
+									children: [
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
+											size: "lg",
+											value: getKnobVal("filterCutoff"),
+											onChange: (v) => updateParam("filterCutoff", v),
+											onReset: () => resetParam("filterCutoff"),
+											label: "Cutoff",
+											fmt: (v) => `${Math.round(35 * Math.pow(600, v))} Hz`
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
+											size: "lg",
+											value: getKnobVal("filterResonance"),
+											onChange: (v) => updateParam("filterResonance", v),
+											onReset: () => resetParam("filterResonance"),
+											label: "Res",
+											fmt: (v) => (v * 3.8).toFixed(2)
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
+											size: "md",
+											value: getKnobVal("filterEnvAmount"),
+											onChange: (v) => updateParam("filterEnvAmount", v),
+											onReset: () => resetParam("filterEnvAmount"),
+											label: "Env Amt",
+											fmt: (v) => `${Math.round((v - .5) * 200)}%`
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											style: {
+												display: "flex",
+												flexDirection: "column",
+												alignItems: "center",
+												gap: 6,
+												userSelect: "none"
+											},
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", {
+												value: params.filterType,
+												onChange: (e) => updateParam("filterType", e.target.value),
+												style: {
+													background: T.bgControl,
+													border: `1px solid ${T.borderDef}`,
+													color: T.textPri,
+													fontFamily: "'Electrolize', monospace",
+													fontSize: 8.5,
+													padding: "4px 6px",
+													outline: "none",
+													height: 22,
+													cursor: "pointer"
+												},
+												children: [
+													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+														value: "lowpass",
+														children: "LP"
+													}),
+													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+														value: "highpass",
+														children: "HP"
+													}),
+													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+														value: "bandpass",
+														children: "BP"
+													}),
+													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+														value: "notch",
+														children: "NT"
+													})
+												]
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+												style: {
+													fontSize: 8.5,
+													color: T.textSec,
+													letterSpacing: "0.14em",
+													textTransform: "uppercase"
+												},
+												children: "Type"
+											})]
+										})
+									]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: {
+									width: 1,
+									height: 40,
+									background: T.borderSubtle
+								} }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									style: {
+										display: "flex",
+										gap: 10,
+										alignItems: "center"
+									},
+									children: [
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
+											size: "sm",
+											value: getKnobVal("filterAttack"),
+											onChange: (v) => updateParam("filterAttack", v),
+											onReset: () => resetParam("filterAttack"),
+											label: "F.Atk",
+											fmt: (v) => v < .1 ? `${Math.round(v * 1e3)} ms` : `${v.toFixed(2)} s`
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
+											size: "sm",
+											value: getKnobVal("filterDecay"),
+											onChange: (v) => updateParam("filterDecay", v),
+											onReset: () => resetParam("filterDecay"),
+											label: "F.Dec",
+											fmt: (v) => v < .1 ? `${Math.round(v * 1e3)} ms` : `${v.toFixed(2)} s`
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
+											size: "sm",
+											value: getKnobVal("filterSustain"),
+											onChange: (v) => updateParam("filterSustain", v),
+											onReset: () => resetParam("filterSustain"),
+											label: "F.Sus",
+											fmt: (v) => `${Math.round(v * 100)}%`
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
+											size: "sm",
+											value: getKnobVal("filterRelease"),
+											onChange: (v) => updateParam("filterRelease", v),
+											onReset: () => resetParam("filterRelease"),
+											label: "F.Rel",
+											fmt: (v) => v < .1 ? `${Math.round(v * 1e3)} ms` : `${v.toFixed(2)} s`
+										})
+									]
+								})
+							]
+						})
+					]
+				}),
+				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					style: {
+						display: "flex",
+						flexDirection: widthMode === "wide" ? "row" : "column",
+						background: T.borderSubtle,
+						gap: 1,
+						borderBottom: `1px solid ${T.borderSubtle}`
+					},
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						style: {
+							display: widthMode === "wide" ? "contents" : "flex",
+							flexDirection: widthMode === "narrow" ? "column" : "row",
+							gap: 1
+						},
+						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								style: {
+									flex: 1,
+									background: T.bgSurface,
+									padding: "10px 8px",
+									display: "flex",
+									flexDirection: "column",
+									gap: 8
+								},
+								children: [
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 										style: {
-											width: 14,
-											height: 14,
-											cursor: "pointer",
-											border: `1px solid ${isEnabled ? T.borderActive : T.borderDef}`,
-											background: isEnabled ? T.redBright : T.bgDeep
-										}
-									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-										style: {
-											fontSize: 8,
-											color: isEnabled ? T.textPri : T.textDim,
-											letterSpacing: "0.04em"
+											fontSize: 9,
+											letterSpacing: "0.18em",
+											color: T.textSec,
+											borderLeft: `2px solid ${T.redPrimary}`,
+											paddingLeft: 6
 										},
-										children: "ON"
-									})]
-								})]
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								style: {
-									display: "flex",
-									gap: 4,
-									justifyContent: "space-between"
-								},
-								children: [
-									"saw",
-									"square",
-									"triangle",
-									"sine"
-								].map((w) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)(WaveMini, {
-									wave: w,
-									active: params[waveKey] === w,
-									onClick: () => updateParam(waveKey, w),
-									W: 42,
-									H: 16
-								}, w))
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								style: {
-									display: "flex",
-									justifyContent: "space-between",
-									alignItems: "center"
-								},
-								children: [
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
-										size: "md",
-										value: getKnobVal(mixKey),
-										onChange: (v) => updateParam(mixKey, v),
-										onReset: () => resetParam(mixKey),
-										label: "Mix"
+										children: "AMP ENV"
 									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
-										size: "sm",
-										value: getKnobVal(panKey),
-										onChange: (v) => updateParam(panKey, v),
-										onReset: () => resetParam(panKey),
-										label: "Pan",
-										fmt: (v) => `${Math.round((v - .5) * 200)}%`
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
-										size: "sm",
-										value: getKnobVal(coarseKey),
-										onChange: (v) => updateParam(coarseKey, v),
-										onReset: () => resetParam(coarseKey),
-										label: "Coarse",
-										fmt: (v) => `${Math.round((v - .5) * 48)} st`
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
-										size: "sm",
-										value: getKnobVal(fineKey),
-										onChange: (v) => updateParam(fineKey, v),
-										onReset: () => resetParam(fineKey),
-										label: "Fine",
-										fmt: (v) => `${Math.round((v - .5) * 200)} c`
-									})
-								]
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								style: {
-									display: "flex",
-									gap: 14,
-									alignItems: "center"
-								},
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
-									size: "sm",
-									value: getKnobVal(pwKey),
-									onChange: (v) => updateParam(pwKey, v),
-									onReset: () => resetParam(pwKey),
-									label: "PW",
-									fmt: (v) => `${Math.round(v * 100)}%`
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
-									size: "sm",
-									value: getKnobVal(pwmKey),
-									onChange: (v) => updateParam(pwmKey, v),
-									onReset: () => resetParam(pwmKey),
-									label: "PWM",
-									fmt: (v) => `${Math.round(v * 100)}%`
-								})]
-							})
-						]
-					}, num);
-				})
-			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				style: {
-					background: T.bgSurface,
-					borderLeft: `3px solid ${T.redPrimary}`,
-					padding: "12px 14px",
-					display: "flex",
-					flexDirection: "column",
-					gap: 8,
-					borderBottom: `1px solid ${T.borderSubtle}`
-				},
-				children: [
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-						style: {
-							fontSize: 10,
-							letterSpacing: "0.18em",
-							color: T.textSec,
-							borderLeft: `2px solid ${T.redPrimary}`,
-							paddingLeft: 8,
-							marginBottom: 4
-						},
-						children: "FILTER"
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FilterDisplay, {
-						W: 628,
-						H: 80,
-						cutoff: getKnobVal("filterCutoff"),
-						res: getKnobVal("filterResonance")
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-						style: {
-							display: "flex",
-							justifyContent: "space-between",
-							paddingLeft: 2,
-							paddingRight: 2,
-							marginTop: -4,
-							marginBottom: 6
-						},
-						children: [
-							"20Hz",
-							"100",
-							"500",
-							"2k",
-							"8k",
-							"20kHz"
-						].map((label) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-							style: {
-								fontSize: 7.5,
-								color: T.textDim,
-								letterSpacing: "0.04em"
-							},
-							children: label
-						}, label))
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						style: {
-							display: "flex",
-							flexDirection: "row",
-							alignItems: "center",
-							justifyContent: "space-between"
-						},
-						children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								style: {
-									display: "flex",
-									gap: 14,
-									alignItems: "center"
-								},
-								children: [
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
-										size: "lg",
-										value: getKnobVal("filterCutoff"),
-										onChange: (v) => updateParam("filterCutoff", v),
-										onReset: () => resetParam("filterCutoff"),
-										label: "Cutoff",
-										fmt: (v) => `${Math.round(35 * Math.pow(600, v))} Hz`
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
-										size: "lg",
-										value: getKnobVal("filterResonance"),
-										onChange: (v) => updateParam("filterResonance", v),
-										onReset: () => resetParam("filterResonance"),
-										label: "Res",
-										fmt: (v) => (v * 3.8).toFixed(2)
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
-										size: "md",
-										value: getKnobVal("filterEnvAmount"),
-										onChange: (v) => updateParam("filterEnvAmount", v),
-										onReset: () => resetParam("filterEnvAmount"),
-										label: "Env Amt",
-										fmt: (v) => `${Math.round((v - .5) * 200)}%`
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+										style: {
+											display: "flex",
+											justifyContent: "center"
+										},
+										children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ADSRDisplay, {
+											W: 112,
+											H: 40,
+											attack: getKnobVal("attack"),
+											decay: getKnobVal("decay"),
+											sustain: getKnobVal("sustain"),
+											release: getKnobVal("release")
+										})
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 										style: {
-											display: "flex",
-											flexDirection: "column",
-											alignItems: "center",
-											gap: 6,
-											userSelect: "none"
+											display: "grid",
+											gridTemplateColumns: "1fr 1fr",
+											gap: "6px 2px",
+											justifyItems: "center"
 										},
-										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", {
-											value: params.filterType,
-											onChange: (e) => updateParam("filterType", e.target.value),
-											style: {
-												background: T.bgControl,
-												border: `1px solid ${T.borderDef}`,
-												color: T.textPri,
-												fontFamily: "'Electrolize', monospace",
-												fontSize: 8.5,
-												padding: "4px 6px",
-												outline: "none",
-												height: 22,
-												cursor: "pointer"
-											},
-											children: [
-												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
-													value: "lowpass",
-													children: "LP"
-												}),
-												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
-													value: "highpass",
-													children: "HP"
-												}),
-												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
-													value: "bandpass",
-													children: "BP"
-												}),
-												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
-													value: "notch",
-													children: "NT"
-												})
-											]
-										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-											style: {
-												fontSize: 8.5,
-												color: T.textSec,
-												letterSpacing: "0.14em",
-												textTransform: "uppercase"
-											},
-											children: "Type"
-										})]
+										children: [
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
+												size: "md",
+												value: getKnobVal("attack"),
+												onChange: (v) => updateParam("attack", v),
+												onReset: () => resetParam("attack"),
+												label: "A",
+												fmt: (v) => v < .1 ? `${Math.round(v * 1e3)} ms` : `${v.toFixed(2)} s`
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
+												size: "md",
+												value: getKnobVal("decay"),
+												onChange: (v) => updateParam("decay", v),
+												onReset: () => resetParam("decay"),
+												label: "D",
+												fmt: (v) => v < .1 ? `${Math.round(v * 1e3)} ms` : `${v.toFixed(2)} s`
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
+												size: "md",
+												value: getKnobVal("sustain"),
+												onChange: (v) => updateParam("sustain", v),
+												onReset: () => resetParam("sustain"),
+												label: "S",
+												fmt: (v) => `${Math.round(v * 100)}%`
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
+												size: "md",
+												value: getKnobVal("release"),
+												onChange: (v) => updateParam("release", v),
+												onReset: () => resetParam("release"),
+												label: "R",
+												fmt: (v) => v < .1 ? `${Math.round(v * 1e3)} ms` : `${v.toFixed(2)} s`
+											})
+										]
 									})
 								]
 							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: {
-								width: 1,
-								height: 40,
-								background: T.borderSubtle
-							} }),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 								style: {
+									flex: 1,
+									background: T.bgSurface,
+									padding: "10px 8px",
 									display: "flex",
+									flexDirection: "column",
+									gap: 8
+								},
+								children: [
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+										style: {
+											fontSize: 9,
+											letterSpacing: "0.18em",
+											color: T.textSec,
+											borderLeft: `2px solid ${T.redPrimary}`,
+											paddingLeft: 6
+										},
+										children: "FLT ENV"
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+										style: {
+											display: "flex",
+											justifyContent: "center"
+										},
+										children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ADSRDisplay, {
+											W: 112,
+											H: 38,
+											attack: getKnobVal("filterAttack"),
+											decay: getKnobVal("filterDecay"),
+											sustain: getKnobVal("filterSustain"),
+											release: getKnobVal("filterRelease")
+										})
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										style: {
+											display: "grid",
+											gridTemplateColumns: "1fr 1fr",
+											gap: "6px 2px",
+											justifyItems: "center"
+										},
+										children: [
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
+												size: "sm",
+												value: getKnobVal("filterAttack"),
+												onChange: (v) => updateParam("filterAttack", v),
+												onReset: () => resetParam("filterAttack"),
+												label: "A",
+												fmt: (v) => v < .1 ? `${Math.round(v * 1e3)} ms` : `${v.toFixed(2)} s`
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
+												size: "sm",
+												value: getKnobVal("filterDecay"),
+												onChange: (v) => updateParam("filterDecay", v),
+												onReset: () => resetParam("filterDecay"),
+												label: "D",
+												fmt: (v) => v < .1 ? `${Math.round(v * 1e3)} ms` : `${v.toFixed(2)} s`
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
+												size: "sm",
+												value: getKnobVal("filterSustain"),
+												onChange: (v) => updateParam("filterSustain", v),
+												onReset: () => resetParam("filterSustain"),
+												label: "S",
+												fmt: (v) => `${Math.round(v * 100)}%`
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
+												size: "sm",
+												value: getKnobVal("filterRelease"),
+												onChange: (v) => updateParam("filterRelease", v),
+												onReset: () => resetParam("filterRelease"),
+												label: "R",
+												fmt: (v) => v < .1 ? `${Math.round(v * 1e3)} ms` : `${v.toFixed(2)} s`
+											})
+										]
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+										style: {
+											display: "flex",
+											justifyContent: "center"
+										},
+										children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
+											size: "sm",
+											value: getKnobVal("filterEnvAmount"),
+											onChange: (v) => updateParam("filterEnvAmount", v),
+											onReset: () => resetParam("filterEnvAmount"),
+											label: "Amt",
+											fmt: (v) => `${Math.round((v - .5) * 200)}%`
+										})
+									})
+								]
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								style: {
+									flex: 1,
+									background: T.bgSurface,
+									padding: "10px 8px",
+									display: "flex",
+									flexDirection: "column",
+									gap: 8
+								},
+								children: [
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+										style: {
+											fontSize: 9,
+											letterSpacing: "0.18em",
+											color: T.textSec,
+											borderLeft: `2px solid ${T.redPrimary}`,
+											paddingLeft: 6
+										},
+										children: "PCH ENV"
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+										style: {
+											display: "flex",
+											justifyContent: "center"
+										},
+										children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ADSRDisplay, {
+											W: 112,
+											H: 38,
+											attack: getKnobVal("pitchEnvAttack"),
+											decay: getKnobVal("pitchEnvDecay"),
+											sustain: getKnobVal("pitchEnvSustain"),
+											release: getKnobVal("pitchEnvRelease")
+										})
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+										style: {
+											display: "flex",
+											justifyContent: "center"
+										},
+										children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
+											size: "sm",
+											value: getKnobVal("pitchEnvAmount"),
+											onChange: (v) => updateParam("pitchEnvAmount", v),
+											onReset: () => resetParam("pitchEnvAmount"),
+											label: "Amt",
+											fmt: (v) => `${Math.round((v - .5) * 48)} st`
+										})
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										style: {
+											display: "grid",
+											gridTemplateColumns: "1fr 1fr",
+											gap: "6px 2px",
+											justifyItems: "center"
+										},
+										children: [
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
+												size: "sm",
+												value: getKnobVal("pitchEnvAttack"),
+												onChange: (v) => updateParam("pitchEnvAttack", v),
+												onReset: () => resetParam("pitchEnvAttack"),
+												label: "A",
+												fmt: (v) => v < .1 ? `${Math.round(v * 1e3)} ms` : `${v.toFixed(2)} s`
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
+												size: "sm",
+												value: getKnobVal("pitchEnvDecay"),
+												onChange: (v) => updateParam("pitchEnvDecay", v),
+												onReset: () => resetParam("pitchEnvDecay"),
+												label: "D",
+												fmt: (v) => v < .1 ? `${Math.round(v * 1e3)} ms` : `${v.toFixed(2)} s`
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
+												size: "sm",
+												value: getKnobVal("pitchEnvSustain"),
+												onChange: (v) => updateParam("pitchEnvSustain", v),
+												onReset: () => resetParam("pitchEnvSustain"),
+												label: "S",
+												fmt: (v) => `${Math.round(v * 100)}%`
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
+												size: "sm",
+												value: getKnobVal("pitchEnvRelease"),
+												onChange: (v) => updateParam("pitchEnvRelease", v),
+												onReset: () => resetParam("pitchEnvRelease"),
+												label: "R",
+												fmt: (v) => v < .1 ? `${Math.round(v * 1e3)} ms` : `${v.toFixed(2)} s`
+											})
+										]
+									})
+								]
+							})
+						]
+					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						style: {
+							display: widthMode === "wide" ? "contents" : "flex",
+							flexDirection: widthMode === "narrow" ? "column" : "row",
+							gap: 1
+						},
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							style: {
+								flex: 1,
+								background: T.bgSurface,
+								padding: "10px 8px",
+								display: "flex",
+								flexDirection: "column",
+								gap: 10
+							},
+							children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+									style: {
+										fontSize: 9,
+										letterSpacing: "0.18em",
+										color: T.textSec,
+										borderLeft: `2px solid ${T.redPrimary}`,
+										paddingLeft: 6
+									},
+									children: "LFO"
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+									style: {
+										display: "flex",
+										gap: 2,
+										justifyContent: "space-between"
+									},
+									children: [
+										"saw",
+										"square",
+										"triangle",
+										"sine"
+									].map((w) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)(WaveMini, {
+										wave: w,
+										active: params.lfoWaveform === w,
+										onClick: () => updateParam("lfoWaveform", w),
+										W: 24,
+										H: 14
+									}, w))
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									style: {
+										display: "flex",
+										justifyContent: "space-between",
+										alignItems: "center"
+									},
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
+										size: "md",
+										value: getKnobVal("lfoRate"),
+										onChange: (v) => updateParam("lfoRate", v),
+										onReset: () => resetParam("lfoRate"),
+										label: "Rate",
+										fmt: (v) => `${(.1 + v * 19.9).toFixed(1)} Hz`
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
+										size: "md",
+										value: getKnobVal("lfoDepth"),
+										onChange: (v) => updateParam("lfoDepth", v),
+										onReset: () => resetParam("lfoDepth"),
+										label: "Depth",
+										fmt: (v) => `${Math.round(v * 100)}%`
+									})]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									style: {
+										display: "flex",
+										flexDirection: "column",
+										alignItems: "center",
+										gap: 4
+									},
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", {
+										value: params.lfoDestination,
+										onChange: (e) => updateParam("lfoDestination", e.target.value),
+										style: {
+											background: T.bgControl,
+											border: `1px solid ${T.borderDef}`,
+											color: T.textPri,
+											fontFamily: "'Electrolize', monospace",
+											fontSize: 8.5,
+											padding: "3px 4px",
+											outline: "none",
+											width: "100%",
+											height: 20,
+											cursor: "pointer"
+										},
+										children: [
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+												value: "pitch",
+												children: "PITCH"
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+												value: "filter",
+												children: "FILTER"
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+												value: "volume",
+												children: "VOLUME"
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+												value: "pan",
+												children: "PAN"
+											})
+										]
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+										style: {
+											fontSize: 8,
+											color: T.textSec,
+											letterSpacing: "0.1em",
+											textTransform: "uppercase"
+										},
+										children: "DEST"
+									})]
+								})
+							]
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							style: {
+								flex: 1,
+								background: T.bgSurface,
+								padding: "10px 8px",
+								display: "flex",
+								flexDirection: "column",
+								gap: 12
+							},
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								style: {
+									fontSize: 9,
+									letterSpacing: "0.18em",
+									color: T.textSec,
+									borderLeft: `2px solid ${T.redPrimary}`,
+									paddingLeft: 6
+								},
+								children: "UNISON"
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								style: {
+									display: "flex",
+									flexDirection: "column",
 									gap: 10,
 									alignItems: "center"
 								},
 								children: [
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
 										size: "sm",
-										value: getKnobVal("filterAttack"),
-										onChange: (v) => updateParam("filterAttack", v),
-										onReset: () => resetParam("filterAttack"),
-										label: "F.Atk",
-										fmt: (v) => v < .1 ? `${Math.round(v * 1e3)} ms` : `${v.toFixed(2)} s`
+										value: getKnobVal("unisonVoices"),
+										onChange: (v) => updateParam("unisonVoices", v),
+										onReset: () => resetParam("unisonVoices"),
+										label: "Voices",
+										fmt: (v) => `${Math.max(1, Math.round(v * 8))}`
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
 										size: "sm",
-										value: getKnobVal("filterDecay"),
-										onChange: (v) => updateParam("filterDecay", v),
-										onReset: () => resetParam("filterDecay"),
-										label: "F.Dec",
-										fmt: (v) => v < .1 ? `${Math.round(v * 1e3)} ms` : `${v.toFixed(2)} s`
+										value: getKnobVal("unisonDetune"),
+										onChange: (v) => updateParam("unisonDetune", v),
+										onReset: () => resetParam("unisonDetune"),
+										label: "Detune",
+										fmt: (v) => `${Math.round(v * 100)} c`
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
 										size: "sm",
-										value: getKnobVal("filterSustain"),
-										onChange: (v) => updateParam("filterSustain", v),
-										onReset: () => resetParam("filterSustain"),
-										label: "F.Sus",
+										value: getKnobVal("unisonSpread"),
+										onChange: (v) => updateParam("unisonSpread", v),
+										onReset: () => resetParam("unisonSpread"),
+										label: "Spread",
 										fmt: (v) => `${Math.round(v * 100)}%`
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
-										size: "sm",
-										value: getKnobVal("filterRelease"),
-										onChange: (v) => updateParam("filterRelease", v),
-										onReset: () => resetParam("filterRelease"),
-										label: "F.Rel",
-										fmt: (v) => v < .1 ? `${Math.round(v * 1e3)} ms` : `${v.toFixed(2)} s`
 									})
 								]
-							})
-						]
-					})
-				]
-			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				style: {
-					display: "flex",
-					flexDirection: "row",
-					background: T.borderSubtle,
-					gap: 1,
-					borderBottom: `1px solid ${T.borderSubtle}`
-				},
-				children: [
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						style: {
-							flex: 1,
-							background: T.bgSurface,
-							padding: "10px 8px",
-							display: "flex",
-							flexDirection: "column",
-							gap: 8
-						},
-						children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								style: {
-									fontSize: 9,
-									letterSpacing: "0.18em",
-									color: T.textSec,
-									borderLeft: `2px solid ${T.redPrimary}`,
-									paddingLeft: 6
-								},
-								children: "AMP ENV"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								style: {
-									display: "flex",
-									justifyContent: "center"
-								},
-								children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ADSRDisplay, {
-									W: 112,
-									H: 40,
-									attack: getKnobVal("attack"),
-									decay: getKnobVal("decay"),
-									sustain: getKnobVal("sustain"),
-									release: getKnobVal("release")
-								})
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								style: {
-									display: "grid",
-									gridTemplateColumns: "1fr 1fr",
-									gap: "6px 2px",
-									justifyItems: "center"
-								},
-								children: [
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
-										size: "md",
-										value: getKnobVal("attack"),
-										onChange: (v) => updateParam("attack", v),
-										onReset: () => resetParam("attack"),
-										label: "A",
-										fmt: (v) => v < .1 ? `${Math.round(v * 1e3)} ms` : `${v.toFixed(2)} s`
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
-										size: "md",
-										value: getKnobVal("decay"),
-										onChange: (v) => updateParam("decay", v),
-										onReset: () => resetParam("decay"),
-										label: "D",
-										fmt: (v) => v < .1 ? `${Math.round(v * 1e3)} ms` : `${v.toFixed(2)} s`
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
-										size: "md",
-										value: getKnobVal("sustain"),
-										onChange: (v) => updateParam("sustain", v),
-										onReset: () => resetParam("sustain"),
-										label: "S",
-										fmt: (v) => `${Math.round(v * 100)}%`
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
-										size: "md",
-										value: getKnobVal("release"),
-										onChange: (v) => updateParam("release", v),
-										onReset: () => resetParam("release"),
-										label: "R",
-										fmt: (v) => v < .1 ? `${Math.round(v * 1e3)} ms` : `${v.toFixed(2)} s`
-									})
-								]
-							})
-						]
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						style: {
-							flex: 1,
-							background: T.bgSurface,
-							padding: "10px 8px",
-							display: "flex",
-							flexDirection: "column",
-							gap: 8
-						},
-						children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								style: {
-									fontSize: 9,
-									letterSpacing: "0.18em",
-									color: T.textSec,
-									borderLeft: `2px solid ${T.redPrimary}`,
-									paddingLeft: 6
-								},
-								children: "FLT ENV"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								style: {
-									display: "flex",
-									justifyContent: "center"
-								},
-								children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ADSRDisplay, {
-									W: 112,
-									H: 38,
-									attack: getKnobVal("filterAttack"),
-									decay: getKnobVal("filterDecay"),
-									sustain: getKnobVal("filterSustain"),
-									release: getKnobVal("filterRelease")
-								})
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								style: {
-									display: "grid",
-									gridTemplateColumns: "1fr 1fr",
-									gap: "6px 2px",
-									justifyItems: "center"
-								},
-								children: [
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
-										size: "sm",
-										value: getKnobVal("filterAttack"),
-										onChange: (v) => updateParam("filterAttack", v),
-										onReset: () => resetParam("filterAttack"),
-										label: "A",
-										fmt: (v) => v < .1 ? `${Math.round(v * 1e3)} ms` : `${v.toFixed(2)} s`
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
-										size: "sm",
-										value: getKnobVal("filterDecay"),
-										onChange: (v) => updateParam("filterDecay", v),
-										onReset: () => resetParam("filterDecay"),
-										label: "D",
-										fmt: (v) => v < .1 ? `${Math.round(v * 1e3)} ms` : `${v.toFixed(2)} s`
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
-										size: "sm",
-										value: getKnobVal("filterSustain"),
-										onChange: (v) => updateParam("filterSustain", v),
-										onReset: () => resetParam("filterSustain"),
-										label: "S",
-										fmt: (v) => `${Math.round(v * 100)}%`
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
-										size: "sm",
-										value: getKnobVal("filterRelease"),
-										onChange: (v) => updateParam("filterRelease", v),
-										onReset: () => resetParam("filterRelease"),
-										label: "R",
-										fmt: (v) => v < .1 ? `${Math.round(v * 1e3)} ms` : `${v.toFixed(2)} s`
-									})
-								]
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								style: {
-									display: "flex",
-									justifyContent: "center"
-								},
-								children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
-									size: "sm",
-									value: getKnobVal("filterEnvAmount"),
-									onChange: (v) => updateParam("filterEnvAmount", v),
-									onReset: () => resetParam("filterEnvAmount"),
-									label: "Amt",
-									fmt: (v) => `${Math.round((v - .5) * 200)}%`
-								})
-							})
-						]
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						style: {
-							flex: 1,
-							background: T.bgSurface,
-							padding: "10px 8px",
-							display: "flex",
-							flexDirection: "column",
-							gap: 8
-						},
-						children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								style: {
-									fontSize: 9,
-									letterSpacing: "0.18em",
-									color: T.textSec,
-									borderLeft: `2px solid ${T.redPrimary}`,
-									paddingLeft: 6
-								},
-								children: "PCH ENV"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								style: {
-									display: "flex",
-									justifyContent: "center"
-								},
-								children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ADSRDisplay, {
-									W: 112,
-									H: 38,
-									attack: getKnobVal("pitchEnvAttack"),
-									decay: getKnobVal("pitchEnvDecay"),
-									sustain: getKnobVal("pitchEnvSustain"),
-									release: getKnobVal("pitchEnvRelease")
-								})
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								style: {
-									display: "flex",
-									justifyContent: "center"
-								},
-								children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
-									size: "sm",
-									value: getKnobVal("pitchEnvAmount"),
-									onChange: (v) => updateParam("pitchEnvAmount", v),
-									onReset: () => resetParam("pitchEnvAmount"),
-									label: "Amt",
-									fmt: (v) => `${Math.round((v - .5) * 48)} st`
-								})
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								style: {
-									display: "grid",
-									gridTemplateColumns: "1fr 1fr",
-									gap: "6px 2px",
-									justifyItems: "center"
-								},
-								children: [
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
-										size: "sm",
-										value: getKnobVal("pitchEnvAttack"),
-										onChange: (v) => updateParam("pitchEnvAttack", v),
-										onReset: () => resetParam("pitchEnvAttack"),
-										label: "A",
-										fmt: (v) => v < .1 ? `${Math.round(v * 1e3)} ms` : `${v.toFixed(2)} s`
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
-										size: "sm",
-										value: getKnobVal("pitchEnvDecay"),
-										onChange: (v) => updateParam("pitchEnvDecay", v),
-										onReset: () => resetParam("pitchEnvDecay"),
-										label: "D",
-										fmt: (v) => v < .1 ? `${Math.round(v * 1e3)} ms` : `${v.toFixed(2)} s`
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
-										size: "sm",
-										value: getKnobVal("pitchEnvSustain"),
-										onChange: (v) => updateParam("pitchEnvSustain", v),
-										onReset: () => resetParam("pitchEnvSustain"),
-										label: "S",
-										fmt: (v) => `${Math.round(v * 100)}%`
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
-										size: "sm",
-										value: getKnobVal("pitchEnvRelease"),
-										onChange: (v) => updateParam("pitchEnvRelease", v),
-										onReset: () => resetParam("pitchEnvRelease"),
-										label: "R",
-										fmt: (v) => v < .1 ? `${Math.round(v * 1e3)} ms` : `${v.toFixed(2)} s`
-									})
-								]
-							})
-						]
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						style: {
-							flex: 1,
-							background: T.bgSurface,
-							padding: "10px 8px",
-							display: "flex",
-							flexDirection: "column",
-							gap: 10
-						},
-						children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								style: {
-									fontSize: 9,
-									letterSpacing: "0.18em",
-									color: T.textSec,
-									borderLeft: `2px solid ${T.redPrimary}`,
-									paddingLeft: 6
-								},
-								children: "LFO"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								style: {
-									display: "flex",
-									gap: 2,
-									justifyContent: "space-between"
-								},
-								children: [
-									"saw",
-									"square",
-									"triangle",
-									"sine"
-								].map((w) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)(WaveMini, {
-									wave: w,
-									active: params.lfoWaveform === w,
-									onClick: () => updateParam("lfoWaveform", w),
-									W: 24,
-									H: 14
-								}, w))
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								style: {
-									display: "flex",
-									justifyContent: "space-between",
-									alignItems: "center"
-								},
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
-									size: "md",
-									value: getKnobVal("lfoRate"),
-									onChange: (v) => updateParam("lfoRate", v),
-									onReset: () => resetParam("lfoRate"),
-									label: "Rate",
-									fmt: (v) => `${(.1 + v * 19.9).toFixed(1)} Hz`
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
-									size: "md",
-									value: getKnobVal("lfoDepth"),
-									onChange: (v) => updateParam("lfoDepth", v),
-									onReset: () => resetParam("lfoDepth"),
-									label: "Depth",
-									fmt: (v) => `${Math.round(v * 100)}%`
-								})]
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							})]
+						})]
+					})]
+				}),
+				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					style: {
+						background: T.bgSurface,
+						padding: "10px 14px",
+						display: "flex",
+						flexDirection: widthMode === "narrow" ? "column" : "row",
+						alignItems: "center",
+						justifyContent: "space-between",
+						gap: widthMode === "narrow" ? 12 : 0
+					},
+					children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							style: {
+								display: "flex",
+								gap: 14,
+								alignItems: "center"
+							},
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
+								size: "sm",
+								value: getKnobVal("portamentoTime"),
+								onChange: (v) => updateParam("portamentoTime", v),
+								onReset: () => resetParam("portamentoTime"),
+								label: "Glide",
+								fmt: (v) => `${(v * 2).toFixed(2)} s`
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 								style: {
 									display: "flex",
 									flexDirection: "column",
 									alignItems: "center",
-									gap: 4
+									gap: 6
 								},
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", {
-									value: params.lfoDestination,
-									onChange: (e) => updateParam("lfoDestination", e.target.value),
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 									style: {
-										background: T.bgControl,
+										display: "flex",
 										border: `1px solid ${T.borderDef}`,
-										color: T.textPri,
-										fontFamily: "'Electrolize', monospace",
-										fontSize: 8.5,
-										padding: "3px 4px",
-										outline: "none",
-										width: "100%",
-										height: 20,
-										cursor: "pointer"
+										background: T.bgDeep
 									},
-									children: [
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
-											value: "pitch",
-											children: "PITCH"
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
-											value: "filter",
-											children: "FILTER"
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
-											value: "volume",
-											children: "VOLUME"
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
-											value: "pan",
-											children: "PAN"
-										})
-									]
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+										onClick: () => updateParam("portamentoMode", "always"),
+										style: {
+											background: params.portamentoMode === "always" ? T.redBright : "transparent",
+											border: "none",
+											color: params.portamentoMode === "always" ? T.textPri : T.textSec,
+											fontFamily: "'Electrolize', monospace",
+											fontSize: 8,
+											padding: "4px 6px",
+											cursor: "pointer",
+											outline: "none"
+										},
+										children: "ALWAYS"
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+										onClick: () => updateParam("portamentoMode", "legato"),
+										style: {
+											background: params.portamentoMode === "legato" ? T.redBright : "transparent",
+											border: "none",
+											color: params.portamentoMode === "legato" ? T.textPri : T.textSec,
+											fontFamily: "'Electrolize', monospace",
+											fontSize: 8,
+											padding: "4px 6px",
+											cursor: "pointer",
+											outline: "none"
+										},
+										children: "LEGATO"
+									})]
 								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 									style: {
 										fontSize: 8,
@@ -11958,197 +12146,68 @@ function ObsidianPanel({ wam, analyser }) {
 										letterSpacing: "0.1em",
 										textTransform: "uppercase"
 									},
-									children: "DEST"
+									children: "MODE"
 								})]
-							})
-						]
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						style: {
-							flex: 1,
-							background: T.bgSurface,
-							padding: "10px 8px",
-							display: "flex",
-							flexDirection: "column",
-							gap: 12
-						},
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-							style: {
-								fontSize: 9,
-								letterSpacing: "0.18em",
-								color: T.textSec,
-								borderLeft: `2px solid ${T.redPrimary}`,
-								paddingLeft: 6
-							},
-							children: "UNISON"
-						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							})]
+						}),
+						widthMode !== "narrow" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: {
+							width: 1,
+							height: 32,
+							background: T.borderSubtle
+						} }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 							style: {
 								display: "flex",
-								flexDirection: "column",
-								gap: 10,
+								gap: 14,
 								alignItems: "center"
 							},
-							children: [
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
-									size: "sm",
-									value: getKnobVal("unisonVoices"),
-									onChange: (v) => updateParam("unisonVoices", v),
-									onReset: () => resetParam("unisonVoices"),
-									label: "Voices",
-									fmt: (v) => `${Math.max(1, Math.round(v * 8))}`
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
-									size: "sm",
-									value: getKnobVal("unisonDetune"),
-									onChange: (v) => updateParam("unisonDetune", v),
-									onReset: () => resetParam("unisonDetune"),
-									label: "Detune",
-									fmt: (v) => `${Math.round(v * 100)} c`
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
-									size: "sm",
-									value: getKnobVal("unisonSpread"),
-									onChange: (v) => updateParam("unisonSpread", v),
-									onReset: () => resetParam("unisonSpread"),
-									label: "Spread",
-									fmt: (v) => `${Math.round(v * 100)}%`
-								})
-							]
-						})]
-					})
-				]
-			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				style: {
-					background: T.bgSurface,
-					padding: "10px 14px",
-					display: "flex",
-					flexDirection: "row",
-					alignItems: "center",
-					justifyContent: "space-between"
-				},
-				children: [
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						style: {
-							display: "flex",
-							gap: 14,
-							alignItems: "center"
-						},
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
-							size: "sm",
-							value: getKnobVal("portamentoTime"),
-							onChange: (v) => updateParam("portamentoTime", v),
-							onReset: () => resetParam("portamentoTime"),
-							label: "Glide",
-							fmt: (v) => `${(v * 2).toFixed(2)} s`
-						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
+								size: "sm",
+								value: getKnobVal("velocityAmpSens"),
+								onChange: (v) => updateParam("velocityAmpSens", v),
+								onReset: () => resetParam("velocityAmpSens"),
+								label: "Vel→Amp",
+								fmt: (v) => `${Math.round(v * 100)}%`
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
+								size: "sm",
+								value: getKnobVal("velocityFilterSens"),
+								onChange: (v) => updateParam("velocityFilterSens", v),
+								onReset: () => resetParam("velocityFilterSens"),
+								label: "Vel→Flt",
+								fmt: (v) => `${Math.round(v * 100)}%`
+							})]
+						}),
+						widthMode !== "narrow" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: {
+							width: 1,
+							height: 32,
+							background: T.borderSubtle
+						} }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 							style: {
 								display: "flex",
-								flexDirection: "column",
-								alignItems: "center",
-								gap: 6
+								gap: 14,
+								alignItems: "center"
 							},
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								style: {
-									display: "flex",
-									border: `1px solid ${T.borderDef}`,
-									background: T.bgDeep
-								},
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-									onClick: () => updateParam("portamentoMode", "always"),
-									style: {
-										background: params.portamentoMode === "always" ? T.redBright : "transparent",
-										border: "none",
-										color: params.portamentoMode === "always" ? T.textPri : T.textSec,
-										fontFamily: "'Electrolize', monospace",
-										fontSize: 8,
-										padding: "4px 6px",
-										cursor: "pointer",
-										outline: "none"
-									},
-									children: "ALWAYS"
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-									onClick: () => updateParam("portamentoMode", "legato"),
-									style: {
-										background: params.portamentoMode === "legato" ? T.redBright : "transparent",
-										border: "none",
-										color: params.portamentoMode === "legato" ? T.textPri : T.textSec,
-										fontFamily: "'Electrolize', monospace",
-										fontSize: 8,
-										padding: "4px 6px",
-										cursor: "pointer",
-										outline: "none"
-									},
-									children: "LEGATO"
-								})]
-							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								style: {
-									fontSize: 8,
-									color: T.textSec,
-									letterSpacing: "0.1em",
-									textTransform: "uppercase"
-								},
-								children: "MODE"
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
+								size: "sm",
+								value: getKnobVal("masterGain"),
+								onChange: (v) => updateParam("masterGain", v),
+								onReset: () => resetParam("masterGain"),
+								label: "Gain",
+								fmt: (v) => `${(20 * Math.log10(v * .998 + .002)).toFixed(1)} dB`
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
+								size: "sm",
+								value: getKnobVal("stereoWidth"),
+								onChange: (v) => updateParam("stereoWidth", v),
+								onReset: () => resetParam("stereoWidth"),
+								label: "Width",
+								fmt: (v) => `${Math.round(v * 200)}%`
 							})]
-						})]
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: {
-						width: 1,
-						height: 32,
-						background: T.borderSubtle
-					} }),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						style: {
-							display: "flex",
-							gap: 14,
-							alignItems: "center"
-						},
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
-							size: "sm",
-							value: getKnobVal("velocityAmpSens"),
-							onChange: (v) => updateParam("velocityAmpSens", v),
-							onReset: () => resetParam("velocityAmpSens"),
-							label: "Vel→Amp",
-							fmt: (v) => `${Math.round(v * 100)}%`
-						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
-							size: "sm",
-							value: getKnobVal("velocityFilterSens"),
-							onChange: (v) => updateParam("velocityFilterSens", v),
-							onReset: () => resetParam("velocityFilterSens"),
-							label: "Vel→Flt",
-							fmt: (v) => `${Math.round(v * 100)}%`
-						})]
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: {
-						width: 1,
-						height: 32,
-						background: T.borderSubtle
-					} }),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						style: {
-							display: "flex",
-							gap: 14,
-							alignItems: "center"
-						},
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
-							size: "sm",
-							value: getKnobVal("masterGain"),
-							onChange: (v) => updateParam("masterGain", v),
-							onReset: () => resetParam("masterGain"),
-							label: "Gain",
-							fmt: (v) => `${(20 * Math.log10(v * .998 + .002)).toFixed(1)} dB`
-						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Knob, {
-							size: "sm",
-							value: getKnobVal("stereoWidth"),
-							onChange: (v) => updateParam("stereoWidth", v),
-							onReset: () => resetParam("stereoWidth"),
-							label: "Width",
-							fmt: (v) => `${Math.round(v * 200)}%`
-						})]
-					})
-				]
-			})
-		]
+						})
+					]
+				})
+			]
+		})
 	})] });
 }
 //#endregion

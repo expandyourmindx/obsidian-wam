@@ -584,6 +584,56 @@ export default function ObsidianPanel({ wam, analyser }) {
   const [syncStatus, setSyncStatus] = useState(''); // 'active', 'unauthorized', 'unsupported', or ''
   const dirHandleRef = useRef(null);
 
+  const wrapperRef = useRef(null);
+  const innerRef = useRef(null);
+  const [containerWidth, setContainerWidth] = useState(660);
+  const [innerHeight, setInnerHeight] = useState(0);
+
+  // ResizeObserver for the outer wrapper container
+  useEffect(() => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+
+    const observer = new ResizeObserver((entries) => {
+      if (!entries || entries.length === 0) return;
+      const width = entries[0].contentRect.width;
+      if (width > 0) {
+        setContainerWidth(width);
+      }
+    });
+
+    observer.observe(wrapper);
+    return () => observer.disconnect();
+  }, []);
+
+  // ResizeObserver for the inner panel to track height changes
+  useEffect(() => {
+    const inner = innerRef.current;
+    if (!inner) return;
+
+    const observer = new ResizeObserver((entries) => {
+      if (!entries || entries.length === 0) return;
+      const height = entries[0].contentRect.height;
+      if (height > 0) {
+        setInnerHeight(height);
+      }
+    });
+
+    observer.observe(inner);
+    return () => observer.disconnect();
+  }, []);
+
+  // Calculate layout variables based on containerWidth
+  const scale = containerWidth < 660 ? containerWidth / 660 : 1;
+  const layoutWidth = containerWidth < 660 ? 660 : Math.min(1100, containerWidth);
+
+  let widthMode = 'wide';
+  if (containerWidth < 600) {
+    widthMode = 'narrow';
+  } else if (containerWidth < 900) {
+    widthMode = 'medium';
+  }
+
   const isSupported = typeof window !== 'undefined' && !!window.showDirectoryPicker;
 
   const statesEqual = (s1, s2) => {
@@ -914,15 +964,30 @@ export default function ObsidianPanel({ wam, analyser }) {
         }
       `}</style>
 
-      <div className="obs-panel" style={{
-        width: 660,
-        background: T.bgMid,
-        fontFamily: "'Electrolize', monospace",
-        color: T.textPri,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 0,
-      }}>
+      <div
+        ref={wrapperRef}
+        style={{
+          width: '100%',
+          height: (scale < 1 && innerHeight > 0) ? `${innerHeight * scale}px` : 'auto',
+          overflow: 'hidden',
+          position: 'relative',
+        }}
+      >
+        <div
+          ref={innerRef}
+          className="obs-panel"
+          style={{
+            width: layoutWidth,
+            background: T.bgMid,
+            fontFamily: "'Electrolize', monospace",
+            color: T.textPri,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 0,
+            transform: scale < 1 ? `scale(${scale})` : 'none',
+            transformOrigin: 'top left',
+          }}
+        >
 
         {/* ─── 1. HEADER ─────────────────────────────────────────── */}
         <div style={{
@@ -1267,14 +1332,14 @@ export default function ObsidianPanel({ wam, analyser }) {
 
           {/* Spectrogram Canvas */}
           <div style={{ flex: 1, position: 'relative' }}>
-            <Spectrogram analyser={analyser} />
+            <Spectrogram analyser={analyser} W={layoutWidth - 380} />
           </div>
         </div>
 
         {/* ─── 2. OSC ROW ────────────────────────────────────────── */}
         <div style={{
           display: 'flex',
-          flexDirection: 'row',
+          flexDirection: widthMode === 'narrow' ? 'column' : 'row',
           background: T.borderSubtle,
           gap: 1,
           borderBottom: `1px solid ${T.borderSubtle}`,
@@ -1429,7 +1494,7 @@ export default function ObsidianPanel({ wam, analyser }) {
 
           {/* FilterDisplay */}
           <FilterDisplay
-            W={628}
+            W={layoutWidth - 28}
             H={80}
             cutoff={getKnobVal('filterCutoff')}
             res={getKnobVal('filterResonance')}
@@ -1556,12 +1621,17 @@ export default function ObsidianPanel({ wam, analyser }) {
         {/* ─── 4. BOTTOM ROW ─────────────────────────────────────── */}
         <div style={{
           display: 'flex',
-          flexDirection: 'row',
+          flexDirection: widthMode === 'wide' ? 'row' : 'column',
           background: T.borderSubtle,
           gap: 1,
           borderBottom: `1px solid ${T.borderSubtle}`,
         }}>
-          {/* AMP ENV Section */}
+          <div style={{
+            display: widthMode === 'wide' ? 'contents' : 'flex',
+            flexDirection: widthMode === 'narrow' ? 'column' : 'row',
+            gap: 1,
+          }}>
+            {/* AMP ENV Section */}
           <div style={{
             flex: 1,
             background: T.bgSurface,
@@ -1788,8 +1858,14 @@ export default function ObsidianPanel({ wam, analyser }) {
               />
             </div>
           </div>
+          </div>
 
-          {/* LFO Section */}
+          <div style={{
+            display: widthMode === 'wide' ? 'contents' : 'flex',
+            flexDirection: widthMode === 'narrow' ? 'column' : 'row',
+            gap: 1,
+          }}>
+            {/* LFO Section */}
           <div style={{
             flex: 1,
             background: T.bgSurface,
@@ -1917,6 +1993,7 @@ export default function ObsidianPanel({ wam, analyser }) {
               />
             </div>
           </div>
+          </div>
         </div>
 
         {/* ─── 5. UTILITY STRIP ───────────────────────────────────── */}
@@ -1924,9 +2001,10 @@ export default function ObsidianPanel({ wam, analyser }) {
           background: T.bgSurface,
           padding: '10px 14px',
           display: 'flex',
-          flexDirection: 'row',
+          flexDirection: widthMode === 'narrow' ? 'column' : 'row',
           alignItems: 'center',
           justifyContent: 'space-between',
+          gap: widthMode === 'narrow' ? 12 : 0,
         }}>
           {/* Glide controls */}
           <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
@@ -1980,7 +2058,7 @@ export default function ObsidianPanel({ wam, analyser }) {
           </div>
 
           {/* Divider */}
-          <div style={{ width: 1, height: 32, background: T.borderSubtle }} />
+          {widthMode !== 'narrow' && <div style={{ width: 1, height: 32, background: T.borderSubtle }} />}
 
           {/* Velocity controls */}
           <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
@@ -2003,7 +2081,7 @@ export default function ObsidianPanel({ wam, analyser }) {
           </div>
 
           {/* Divider */}
-          <div style={{ width: 1, height: 32, background: T.borderSubtle }} />
+          {widthMode !== 'narrow' && <div style={{ width: 1, height: 32, background: T.borderSubtle }} />}
 
           {/* Master controls */}
           <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
@@ -2025,7 +2103,7 @@ export default function ObsidianPanel({ wam, analyser }) {
             />
           </div>
         </div>
-
+      </div>
       </div>
     </>
   );
