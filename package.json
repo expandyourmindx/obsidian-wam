@@ -20,9 +20,12 @@
   },
   "homepage": "https://github.com/expandyourmindx/obsidian-wam#readme",
   "dependencies": {
-    "@webaudiomodules/sdk": "^0.0.12"
+    "@webaudiomodules/sdk": "^0.0.12",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
   },
   "devDependencies": {
+    "@vitejs/plugin-react": "^6.0.2",
     "vite": "^8.0.16"
   }
 }

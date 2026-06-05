@@ -1,13 +1,15 @@
 import { defineConfig } from 'vite';
 import { resolve } from 'path';
+import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   base: '/obsidian-wam/',
+  plugins: [react()],
   build: {
     lib: {
       entry: resolve(__dirname, 'src/index.js'),
       name: 'ObsidianWAM',
-      fileName: 'index',
+      fileName: () => 'index.js',
       formats: ['es'],
     },
     rollupOptions: {
