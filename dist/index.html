@@ -4,8 +4,7 @@
 <head>
     <script>window.process = { env: { NODE_ENV: 'production' } };</script>
     <meta charset="UTF-8">
-    <title>Obsidian WAM — Test Host</title>
-    <style>
+    <title>Obsidian WAM — Test Host</title>    <style>
         * {
             box-sizing: border-box;
             margin: 0;
@@ -13,183 +12,142 @@
         }
 
         body {
-            background: #080b0f;
-            color: #8a9298;
-            font-family: 'Courier New', monospace;
-            font-size: 13px;
+            background: #0d0a09;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             min-height: 100vh;
-            gap: 32px;
-        }
-
-        h1 {
-            color: #b08df0;
-            font-size: 32px;
-            letter-spacing: 0.2em;
-            font-weight: normal;
-        }
-
-        .status {
-            color: #3a4450;
-            font-size: 11px;
-            letter-spacing: 0.15em;
-            text-transform: uppercase;
-        }
-
-        .status.ready {
-            color: #5ab870;
-        }
-
-        .status.error {
-            color: #c05050;
-        }
-
-        .keys {
-            display: flex;
-            gap: 4px;
-        }
-
-        button.key {
-            background: #1e2630;
-            border: 1px solid #2e3d4e;
-            color: #8a9298;
-            font-family: 'Courier New', monospace;
-            font-size: 10px;
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-            padding: 20px 16px;
-            cursor: pointer;
-            min-width: 56px;
-            text-align: center;
-        }
-
-        button.key:active,
-        button.key.held {
-            background: #3d2468;
-            border-color: #7b4fcf;
-            color: #b08df0;
-        }
-
-        .note-label {
-            font-size: 9px;
-            margin-top: 6px;
-            display: block;
-        }
-
-        .controls {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            width: 360px;
-        }
-
-        .control-row {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-        }
-
-        .control-label {
-            font-size: 10px;
-            text-transform: uppercase;
-            letter-spacing: 0.15em;
-            color: #3a4450;
-            min-width: 80px;
-        }
-
-        input[type=range] {
-            flex: 1;
-            accent-color: #7b4fcf;
-        }
-
-        .control-value {
-            font-size: 10px;
-            color: #b08df0;
-            min-width: 40px;
-            text-align: right;
-        }
-        .midi-learn-btn.learning {
-            background: #3d2468;
-            border-color: #7b4fcf;
-            color: #b08df0;
-            animation: pulse 0.8s ease-in-out infinite;
-        }
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.4; }
         }
     </style>
 </head>
 
 <body>
 
-    <h1>OBSIDIAN</h1>
-    <div class="status" id="status">Initializing...</div>
-
-    <canvas id="spectrogram" width="800" height="200" style="
-      width: 800px;
-      height: 200px;
-      background: #080b0f;
-      border: 1px solid #2e3d4e;
-      display: block;
-    "></canvas>
-
-    <div class="keys" id="keys"></div>
-
     <div id="gui-mount"></div>
 
     <script type="module">
         import ObsidianWAM from './index.js';
 
-        const status = document.getElementById('status');
-        let midiLearnTarget = null;
+        let obsidian = null;
+        let booted = false;
 
-        // One octave of notes for the test keyboard
-        const notes = [
-            { label: 'C4', midi: 60 },
-            { label: 'D4', midi: 62 },
-            { label: 'E4', midi: 64 },
-            { label: 'F4', midi: 65 },
-            { label: 'G4', midi: 67 },
-            { label: 'A4', midi: 69 },
-            { label: 'B4', midi: 71 },
-            { label: 'C5', midi: 72 },
-        ];
+        async function boot() {
+            if (booted) return;
+            booted = true;
 
-        // Build keyboard buttons
-        const keysEl = document.getElementById('keys');
-        notes.forEach(({ label, midi }) => {
-            const btn = document.createElement('button');
-            btn.className = 'key';
-            btn.innerHTML = `${label}<span class="note-label">${midi}</span>`;
+            try {
+                const audioContext = new AudioContext();
+                await audioContext.resume();
 
-            btn.addEventListener('mousedown', () => {
-                btn.classList.add('held');
-                obsidian?.noteOn(midi, 100);
-            });
+                const groupId = 'obsidian-test-host';
+                obsidian = new ObsidianWAM(groupId, audioContext);
+                await obsidian.initialize();
 
-            btn.addEventListener('mouseup', () => {
-                btn.classList.remove('held');
-                obsidian?.noteOff(midi);
-            });
+                const gui = await obsidian.createGUI();
+                document.getElementById('gui-mount').appendChild(gui);
 
-            btn.addEventListener('mouseleave', () => {
-                if (btn.classList.contains('held')) {
-                    btn.classList.remove('held');
-                    obsidian?.noteOff(midi);
-                }
-            });
+                // Connect directly to speakers
+                obsidian.audioNode.connect(audioContext.destination);
 
-            keysEl.appendChild(btn);
-        });
+                await initMIDI();
+            } catch (err) {
+                console.error(err);
+            }
+        }
 
+        async function initMIDI() {
+          if (!navigator.requestMIDIAccess) {
+            console.warn('Web MIDI not supported in this browser');
+            return;
+          }
 
+          try {
+            const midiAccess = await navigator.requestMIDIAccess();
 
-        // Keyboard mapping — two rows give you a chromatic octave
+            function connectInputs(access) {
+              access.inputs.forEach(input => {
+                input.onmidimessage = handleMIDIMessage;
+                console.log(`MIDI connected: ${input.name}`);
+              });
+            }
+
+            connectInputs(midiAccess);
+
+            midiAccess.onstatechange = (e) => {
+              if (e.port.type === 'input' && e.port.state === 'connected') {
+                e.port.onmidimessage = handleMIDIMessage;
+                console.log(`MIDI hotplugged: ${e.port.name}`);
+              }
+            };
+          } catch (err) {
+            console.warn('MIDI access denied:', err);
+          }
+        }
+
+        function handleMIDIMessage(e) {
+          const [status, data1, data2] = e.data;
+          const command = status & 0xf0;
+
+          switch (command) {
+            case 0x90: // Note On
+              if (data2 > 0) {
+                boot().then(() => obsidian?.noteOn(data1, data2));
+              } else {
+                obsidian?.noteOff(data1);
+              }
+              break;
+
+            case 0x80: // Note Off
+              obsidian?.noteOff(data1);
+              break;
+
+            case 0xb0: // Control Change
+              handleCC(data1, data2);
+              break;
+
+            case 0xe0: // Pitch Bend
+              const bend = ((data2 << 7) | data1) - 8192;
+              const bendSemitones = (bend / 8192) * 2;
+              obsidian?.setParam('pitchBend', bendSemitones);
+              break;
+          }
+        }
+
+        const ccMap = {
+          74: 'filterCutoff',
+          71: 'filterResonance',
+          73: 'attack',
+          72: 'release',
+          91: 'lfoRate',
+          93: 'lfoDepth',
+          7:  'masterGain',
+          1:  'filterEnvAmount',
+        };
+
+        function handleCC(cc, value) {
+          const paramKey = ccMap[cc];
+          if (!paramKey) return;
+
+          const normalized = value / 127;
+          const paramRanges = {
+            filterCutoff:    [0, 1],
+            filterResonance: [0, 3.8],
+            attack:          [0.001, 2],
+            release:         [0.001, 4],
+            lfoRate:         [0.1, 20],
+            lfoDepth:        [0, 1],
+            masterGain:      [0, 1],
+            filterEnvAmount: [-1, 1],
+          };
+
+          const range = paramRanges[paramKey];
+          if (!range) return;
+
+          const scaled = range[0] + normalized * (range[1] - range[0]);
+          obsidian?.setParam(paramKey, scaled);
+        }
+
         const keyMap = {
             'a': 60, // C4
             'w': 61, // C#4
@@ -211,15 +169,13 @@
 
         const heldKeys = new Set();
 
-        // Kill all notes when window loses focus
-        // Prevents stuck notes when tabbing away or triggering shortcuts
         window.addEventListener('blur', () => {
             heldKeys.forEach(note => obsidian?.noteOff(note));
             heldKeys.clear();
         });
 
         window.addEventListener('keydown', (e) => {
-            if (e.repeat) return; // ignore held key repeat
+            if (e.repeat) return;
             if (e.metaKey || e.ctrlKey) return;
             const note = keyMap[e.key];
             if (note === undefined) return;
@@ -237,260 +193,7 @@
             obsidian?.noteOff(note);
         });
 
-        // Boot the WAM
-        // AudioContext must be created after a user gesture on some browsers
-        // so we init on first interaction
-        let obsidian = null;
-        let booted = false;
-
-        async function boot() {
-            if (booted) return;
-            booted = true;
-
-            try {
-                const audioContext = new AudioContext();
-                await audioContext.resume();
-
-                const groupId = 'obsidian-test-host';
-                obsidian = new ObsidianWAM(groupId, audioContext);
-                await obsidian.initialize();
-
-                const gui = await obsidian.createGUI();
-                document.getElementById('gui-mount').appendChild(gui);
-
-                // Connect directly to speakers
-                initSpectrogram(audioContext, obsidian.audioNode);
-                await initMIDI();
-
-                status.textContent = 'Ready';
-                status.className = 'status ready';
-            } catch (err) {
-                console.error(err);
-                status.textContent = `Error: ${err.message}`;
-                status.className = 'status error';
-            }
-        }
-
-        async function initMIDI() {
-          if (!navigator.requestMIDIAccess) {
-            console.warn('Web MIDI not supported in this browser');
-            return;
-          }
-
-          try {
-            const midiAccess = await navigator.requestMIDIAccess();
-
-            function connectInputs(access) {
-              access.inputs.forEach(input => {
-                input.onmidimessage = handleMIDIMessage;
-                console.log(`MIDI connected: ${input.name}`);
-              });
-            }
-
-            // Connect existing inputs
-            connectInputs(midiAccess);
-
-            // Handle hotplug — device connected after page load
-            midiAccess.onstatechange = (e) => {
-              if (e.port.type === 'input' && e.port.state === 'connected') {
-                e.port.onmidimessage = handleMIDIMessage;
-                console.log(`MIDI hotplugged: ${e.port.name}`);
-              }
-            };
-
-            // Update status
-            const deviceCount = midiAccess.inputs.size;
-            if (deviceCount > 0) {
-              status.textContent = `Ready — ${deviceCount} MIDI device${deviceCount > 1 ? 's' : ''} connected`;
-            }
-
-          } catch (err) {
-            console.warn('MIDI access denied:', err);
-          }
-        }
-
-        function handleMIDIMessage(e) {
-          const [status, data1, data2] = e.data;
-          const command = status & 0xf0;
-          const channel = status & 0x0f;
-
-          switch (command) {
-            case 0x90: // Note On
-              if (data2 > 0) {
-                // Ensure audio context is running
-                boot().then(() => obsidian?.noteOn(data1, data2));
-              } else {
-                // Note On with velocity 0 = Note Off
-                obsidian?.noteOff(data1);
-              }
-              break;
-
-            case 0x80: // Note Off
-              obsidian?.noteOff(data1);
-              break;
-
-            case 0xb0: // Control Change
-              handleCC(channel, data1, data2);
-              break;
-
-            case 0xe0: // Pitch Bend
-              // data1 = LSB, data2 = MSB
-              const bend = ((data2 << 7) | data1) - 8192;
-              const bendSemitones = (bend / 8192) * 2; // ±2 semitones
-              obsidian?.setParam('pitchBend', bendSemitones);
-              break;
-          }
-        }
-
-        // CC number to param key mapping
-        // These are the Arturia MiniLab 3 default CC assignments
-        const ccMap = {
-          74: 'filterCutoff',    // Knob 1 — filter cutoff
-          71: 'filterResonance', // Knob 2 — resonance
-          73: 'attack',          // Knob 3 — attack
-          72: 'release',         // Knob 4 — release
-          91: 'lfoRate',         // Knob 5 — LFO rate
-          93: 'lfoDepth',        // Knob 6 — LFO depth
-          7:  'masterGain',      // Mod wheel or volume knob
-          1:  'filterEnvAmount', // Mod wheel
-        };
-
-        function handleCC(channel, cc, value) {
-          // Check MIDI learn first
-          if (midiLearnTarget) {
-            ccMap[cc] = midiLearnTarget;
-            midiLearnTarget = null;
-            document.querySelectorAll('.midi-learn-btn.learning').forEach(btn => {
-              btn.classList.remove('learning');
-              btn.textContent = 'MIDI';
-            });
-            console.log(`MIDI learn: CC${cc} → ${ccMap[cc]}`);
-          }
-
-          const paramKey = ccMap[cc];
-          if (!paramKey) return;
-
-          // Normalize CC value 0-127 to param range
-          // Different params have different ranges so we normalize to 0-1
-          // and let each param's natural range handle it
-          const normalized = value / 127;
-
-          // Params that need range scaling
-          const paramRanges = {
-            filterCutoff:    [0, 1],
-            filterResonance: [0, 3.8],
-            attack:          [0.001, 2],
-            release:         [0.001, 4],
-            lfoRate:         [0.1, 20],
-            lfoDepth:        [0, 1],
-            masterGain:      [0, 1],
-            filterEnvAmount: [-1, 1],
-          };
-
-          const range = paramRanges[paramKey];
-          if (!range) return;
-
-          const scaled = range[0] + normalized * (range[1] - range[0]);
-          obsidian?.setParam(paramKey, scaled);
-        }
-
-        let analyser = null;
-        let spectrogramAnimFrame = null;
-
-        function initSpectrogram(audioContext, sourceNode) {
-          analyser = audioContext.createAnalyser();
-          analyser.fftSize = 4096;
-          analyser.smoothingTimeConstant = 0.8;
-
-          // Insert analyser between source and destination
-          sourceNode.disconnect();
-          sourceNode.connect(analyser);
-          analyser.connect(audioContext.destination);
-
-          drawSpectrogram();
-        }
-
-        function drawSpectrogram() {
-          spectrogramAnimFrame = requestAnimationFrame(drawSpectrogram);
-
-          const canvas = document.getElementById('spectrogram');
-          const ctx = canvas.getContext('2d');
-          const width = canvas.width;
-          const height = canvas.height;
-
-          const bufferLength = analyser.frequencyBinCount;
-          const dataArray = new Float32Array(bufferLength);
-          analyser.getFloatFrequencyData(dataArray);
-
-          // Clear
-          ctx.fillStyle = '#080b0f';
-          ctx.fillRect(0, 0, width, height);
-
-          // Frequency grid lines
-          const freqs = [100, 200, 500, 1000, 2000, 5000, 10000];
-          const nyquist = analyser.context.sampleRate / 2;
-          ctx.strokeStyle = '#1e2630';
-          ctx.lineWidth = 1;
-          ctx.fillStyle = '#3a4450';
-          ctx.font = '9px Courier New';
-          freqs.forEach(freq => {
-            const x = (Math.log10(freq / 20) / Math.log10(nyquist / 20)) * width;
-            ctx.beginPath();
-            ctx.moveTo(x, 0);
-            ctx.lineTo(x, height);
-            ctx.stroke();
-            ctx.fillText(freq >= 1000 ? `${freq/1000}k` : freq, x + 2, height - 4);
-          });
-
-          // dB grid lines
-          const dbLevels = [-20, -40, -60, -80];
-          dbLevels.forEach(db => {
-            const y = ((db - (-100)) / 100) * height;
-            const flippedY = height - y;
-            ctx.strokeStyle = '#1e2630';
-            ctx.beginPath();
-            ctx.moveTo(0, flippedY);
-            ctx.lineTo(width, flippedY);
-            ctx.stroke();
-            ctx.fillStyle = '#3a4450';
-            ctx.fillText(`${db}dB`, 2, flippedY - 2);
-          });
-
-          // Spectrum curve — logarithmic frequency axis
-          ctx.beginPath();
-          ctx.strokeStyle = '#7b4fcf';
-          ctx.lineWidth = 2;
-
-          for (let x = 0; x < width; x++) {
-            // Map x to frequency logarithmically (20hz - nyquist)
-            const freq = 20 * Math.pow(nyquist / 20, x / width);
-            const binIndex = Math.round(freq / nyquist * bufferLength);
-            const clamped = Math.max(0, Math.min(bufferLength - 1, binIndex));
-
-            // dataArray values are in dB, range roughly -100 to 0
-            const db = dataArray[clamped];
-            const normalized = (db + 100) / 100; // 0 to 1
-            const y = height - (normalized * height);
-
-            if (x === 0) ctx.moveTo(x, y);
-            else ctx.lineTo(x, y);
-          }
-          ctx.stroke();
-
-          // Fill under curve
-          ctx.lineTo(width, height);
-          ctx.lineTo(0, height);
-          ctx.closePath();
-          ctx.fillStyle = 'rgba(123, 79, 207, 0.15)';
-          ctx.fill();
-        }
-
-
-
         document.addEventListener('click', boot, { once: true });
-        status.textContent = 'Click anywhere to initialize audio';
     </script>
-
 </body>
-
 </html>
