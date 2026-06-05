@@ -130,4 +130,13 @@ export default class ObsidianWAM extends WebAudioModule {
     async setState(state) {
         Object.entries(state).forEach(([key, value]) => this.setParam(key, value));
     }
+
+    async createGUI() {
+        const { mountGUI } = await import('./ObsidianGUI.js');
+        const container = document.createElement('div');
+        container.style.width = '660px';
+        container.style.background = '#131010';
+        mountGUI(container, this);
+        return container;
+    }
 }
