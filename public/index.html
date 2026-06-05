@@ -30,28 +30,33 @@
   <script type="module">
     import ObsidianWAM from './index.js';
 
+    const audioContext = new AudioContext();
     let obsidian = null;
-    let booted = false;
+    let guiMounted = false;
+    let audioStarted = false;
 
-    async function boot() {
-      if (booted) return;
-      booted = true;
-
+    async function mountGUI() {
+      if (guiMounted) return;
+      guiMounted = true;
       try {
-        const audioContext = new AudioContext();
-        await audioContext.resume();
-
         const groupId = 'obsidian-test-host';
         obsidian = new ObsidianWAM(groupId, audioContext);
         await obsidian.initialize();
-
         const gui = await obsidian.createGUI();
         document.getElementById('gui-mount').appendChild(gui);
-
-        // Connect directly to speakers
-        obsidian.audioNode.connect(audioContext.destination);
-
+        document.getElementById('gui-mount').addEventListener('click', startAudio);
         await initMIDI();
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function startAudio() {
+      if (audioStarted) return;
+      audioStarted = true;
+      try {
+        await audioContext.resume();
+        obsidian.audioNode.connect(audioContext.destination);
       } catch (err) {
         console.error(err);
       }
@@ -93,7 +98,7 @@
       switch (command) {
         case 0x90: // Note On
           if (data2 > 0) {
-            boot().then(() => obsidian?.noteOn(data1, data2));
+            startAudio().then(() => obsidian?.noteOn(data1, data2));
           } else {
             obsidian?.noteOff(data1);
           }
@@ -184,7 +189,7 @@
       e.preventDefault();
       obsidian?.noteOff(note);
       heldKeys.add(note);
-      boot().then(() => obsidian?.noteOn(note, 100));
+      startAudio().then(() => obsidian?.noteOn(note, 100));
     });
 
     window.addEventListener('keyup', (e) => {
@@ -194,7 +199,7 @@
       obsidian?.noteOff(note);
     });
 
-    boot();
+    mountGUI();
   </script>
 </body>
 
