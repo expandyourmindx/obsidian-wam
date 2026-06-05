@@ -2,198 +2,200 @@
 <html lang="en">
 
 <head>
-    <script>window.process = { env: { NODE_ENV: 'production' } };</script>
-    <meta charset="UTF-8">
-    <title>Obsidian WAM — Test Host</title>    <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
+  <script>window.process = { env: { NODE_ENV: 'production' } };</script>
+  <meta charset="UTF-8">
+  <title>Obsidian WAM — Test Host</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
 
-        body {
-            background: #0d0a09;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-        }
-    </style>
+    body {
+      background: #0d0a09;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+  </style>
 </head>
 
 <body>
 
-    <div id="gui-mount"></div>
+  <div id="gui-mount"></div>
 
-    <script type="module">
-        import ObsidianWAM from './index.js';
+  <script type="module">
+    import ObsidianWAM from './index.js';
 
-        let obsidian = null;
-        let booted = false;
+    let obsidian = null;
+    let booted = false;
 
-        async function boot() {
-            if (booted) return;
-            booted = true;
+    async function boot() {
+      if (booted) return;
+      booted = true;
 
-            try {
-                const audioContext = new AudioContext();
-                await audioContext.resume();
+      try {
+        const audioContext = new AudioContext();
+        await audioContext.resume();
 
-                const groupId = 'obsidian-test-host';
-                obsidian = new ObsidianWAM(groupId, audioContext);
-                await obsidian.initialize();
+        const groupId = 'obsidian-test-host';
+        obsidian = new ObsidianWAM(groupId, audioContext);
+        await obsidian.initialize();
 
-                const gui = await obsidian.createGUI();
-                document.getElementById('gui-mount').appendChild(gui);
+        const gui = await obsidian.createGUI();
+        document.getElementById('gui-mount').appendChild(gui);
 
-                // Connect directly to speakers
-                obsidian.audioNode.connect(audioContext.destination);
+        // Connect directly to speakers
+        obsidian.audioNode.connect(audioContext.destination);
 
-                await initMIDI();
-            } catch (err) {
-                console.error(err);
-            }
+        await initMIDI();
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function initMIDI() {
+      if (!navigator.requestMIDIAccess) {
+        console.warn('Web MIDI not supported in this browser');
+        return;
+      }
+
+      try {
+        const midiAccess = await navigator.requestMIDIAccess();
+
+        function connectInputs(access) {
+          access.inputs.forEach(input => {
+            input.onmidimessage = handleMIDIMessage;
+            console.log(`MIDI connected: ${input.name}`);
+          });
         }
 
-        async function initMIDI() {
-          if (!navigator.requestMIDIAccess) {
-            console.warn('Web MIDI not supported in this browser');
-            return;
+        connectInputs(midiAccess);
+
+        midiAccess.onstatechange = (e) => {
+          if (e.port.type === 'input' && e.port.state === 'connected') {
+            e.port.onmidimessage = handleMIDIMessage;
+            console.log(`MIDI hotplugged: ${e.port.name}`);
           }
-
-          try {
-            const midiAccess = await navigator.requestMIDIAccess();
-
-            function connectInputs(access) {
-              access.inputs.forEach(input => {
-                input.onmidimessage = handleMIDIMessage;
-                console.log(`MIDI connected: ${input.name}`);
-              });
-            }
-
-            connectInputs(midiAccess);
-
-            midiAccess.onstatechange = (e) => {
-              if (e.port.type === 'input' && e.port.state === 'connected') {
-                e.port.onmidimessage = handleMIDIMessage;
-                console.log(`MIDI hotplugged: ${e.port.name}`);
-              }
-            };
-          } catch (err) {
-            console.warn('MIDI access denied:', err);
-          }
-        }
-
-        function handleMIDIMessage(e) {
-          const [status, data1, data2] = e.data;
-          const command = status & 0xf0;
-
-          switch (command) {
-            case 0x90: // Note On
-              if (data2 > 0) {
-                boot().then(() => obsidian?.noteOn(data1, data2));
-              } else {
-                obsidian?.noteOff(data1);
-              }
-              break;
-
-            case 0x80: // Note Off
-              obsidian?.noteOff(data1);
-              break;
-
-            case 0xb0: // Control Change
-              handleCC(data1, data2);
-              break;
-
-            case 0xe0: // Pitch Bend
-              const bend = ((data2 << 7) | data1) - 8192;
-              const bendSemitones = (bend / 8192) * 2;
-              obsidian?.setParam('pitchBend', bendSemitones);
-              break;
-          }
-        }
-
-        const ccMap = {
-          74: 'filterCutoff',
-          71: 'filterResonance',
-          73: 'attack',
-          72: 'release',
-          91: 'lfoRate',
-          93: 'lfoDepth',
-          7:  'masterGain',
-          1:  'filterEnvAmount',
         };
+      } catch (err) {
+        console.warn('MIDI access denied:', err);
+      }
+    }
 
-        function handleCC(cc, value) {
-          const paramKey = ccMap[cc];
-          if (!paramKey) return;
+    function handleMIDIMessage(e) {
+      const [status, data1, data2] = e.data;
+      const command = status & 0xf0;
 
-          const normalized = value / 127;
-          const paramRanges = {
-            filterCutoff:    [0, 1],
-            filterResonance: [0, 3.8],
-            attack:          [0.001, 2],
-            release:         [0.001, 4],
-            lfoRate:         [0.1, 20],
-            lfoDepth:        [0, 1],
-            masterGain:      [0, 1],
-            filterEnvAmount: [-1, 1],
-          };
+      switch (command) {
+        case 0x90: // Note On
+          if (data2 > 0) {
+            boot().then(() => obsidian?.noteOn(data1, data2));
+          } else {
+            obsidian?.noteOff(data1);
+          }
+          break;
 
-          const range = paramRanges[paramKey];
-          if (!range) return;
+        case 0x80: // Note Off
+          obsidian?.noteOff(data1);
+          break;
 
-          const scaled = range[0] + normalized * (range[1] - range[0]);
-          obsidian?.setParam(paramKey, scaled);
-        }
+        case 0xb0: // Control Change
+          handleCC(data1, data2);
+          break;
 
-        const keyMap = {
-            'a': 60, // C4
-            'w': 61, // C#4
-            's': 62, // D4
-            'e': 63, // D#4
-            'd': 64, // E4
-            'f': 65, // F4
-            't': 66, // F#4
-            'g': 67, // G4
-            'y': 68, // G#4
-            'h': 69, // A4
-            'u': 70, // A#4
-            'j': 71, // B4
-            'k': 72, // C5
-            'o': 73, // C#5
-            'l': 74, // D5
-            'p': 75, // D#5
-        };
+        case 0xe0: // Pitch Bend
+          const bend = ((data2 << 7) | data1) - 8192;
+          const bendSemitones = (bend / 8192) * 2;
+          obsidian?.setParam('pitchBend', bendSemitones);
+          break;
+      }
+    }
 
-        const heldKeys = new Set();
+    const ccMap = {
+      74: 'filterCutoff',
+      71: 'filterResonance',
+      73: 'attack',
+      72: 'release',
+      91: 'lfoRate',
+      93: 'lfoDepth',
+      7: 'masterGain',
+      1: 'filterEnvAmount',
+    };
 
-        window.addEventListener('blur', () => {
-            heldKeys.forEach(note => obsidian?.noteOff(note));
-            heldKeys.clear();
-        });
+    function handleCC(cc, value) {
+      const paramKey = ccMap[cc];
+      if (!paramKey) return;
 
-        window.addEventListener('keydown', (e) => {
-            if (e.repeat) return;
-            if (e.metaKey || e.ctrlKey) return;
-            const note = keyMap[e.key];
-            if (note === undefined) return;
-            if (heldKeys.has(note)) return;
-            e.preventDefault();
-            obsidian?.noteOff(note);
-            heldKeys.add(note);
-            boot().then(() => obsidian?.noteOn(note, 100));
-        });
+      const normalized = value / 127;
+      const paramRanges = {
+        filterCutoff: [0, 1],
+        filterResonance: [0, 3.8],
+        attack: [0.001, 2],
+        release: [0.001, 4],
+        lfoRate: [0.1, 20],
+        lfoDepth: [0, 1],
+        masterGain: [0, 1],
+        filterEnvAmount: [-1, 1],
+      };
 
-        window.addEventListener('keyup', (e) => {
-            const note = keyMap[e.key];
-            if (note === undefined) return;
-            heldKeys.delete(note);
-            obsidian?.noteOff(note);
-        });
+      const range = paramRanges[paramKey];
+      if (!range) return;
 
-        document.addEventListener('DOMContentLoaded', boot);
-    </script>
+      const scaled = range[0] + normalized * (range[1] - range[0]);
+      obsidian?.setParam(paramKey, scaled);
+    }
+
+    const keyMap = {
+      'a': 60, // C4
+      'w': 61, // C#4
+      's': 62, // D4
+      'e': 63, // D#4
+      'd': 64, // E4
+      'f': 65, // F4
+      't': 66, // F#4
+      'g': 67, // G4
+      'y': 68, // G#4
+      'h': 69, // A4
+      'u': 70, // A#4
+      'j': 71, // B4
+      'k': 72, // C5
+      'o': 73, // C#5
+      'l': 74, // D5
+      'p': 75, // D#5
+    };
+
+    const heldKeys = new Set();
+
+    window.addEventListener('blur', () => {
+      heldKeys.forEach(note => obsidian?.noteOff(note));
+      heldKeys.clear();
+    });
+
+    window.addEventListener('keydown', (e) => {
+      if (e.repeat) return;
+      if (e.metaKey || e.ctrlKey) return;
+      const note = keyMap[e.key];
+      if (note === undefined) return;
+      if (heldKeys.has(note)) return;
+      e.preventDefault();
+      obsidian?.noteOff(note);
+      heldKeys.add(note);
+      boot().then(() => obsidian?.noteOn(note, 100));
+    });
+
+    window.addEventListener('keyup', (e) => {
+      const note = keyMap[e.key];
+      if (note === undefined) return;
+      heldKeys.delete(note);
+      obsidian?.noteOff(note);
+    });
+
+    boot();
+  </script>
 </body>
+
 </html>
