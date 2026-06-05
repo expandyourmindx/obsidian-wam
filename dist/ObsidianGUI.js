@@ -10528,27 +10528,62 @@ function Spectrogram({ analyser, W = 538, H = 52 }) {
 		}
 	});
 }
+var DB_NAME = "obsidian_presets_db";
+var STORE_NAME = "handles_store";
+var KEY_NAME = "obsidian_preset_folder_handle";
+function getDB() {
+	return new Promise((resolve, reject) => {
+		if (typeof indexedDB === "undefined") {
+			reject(/* @__PURE__ */ new Error("IndexedDB is not supported"));
+			return;
+		}
+		const request = indexedDB.open(DB_NAME, 1);
+		request.onupgradeneeded = (e) => {
+			const db = e.target.result;
+			if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME);
+		};
+		request.onsuccess = (e) => resolve(e.target.result);
+		request.onerror = (e) => reject(e.target.error);
+	});
+}
+async function getSavedFolderHandle() {
+	try {
+		const db = await getDB();
+		return new Promise((resolve, reject) => {
+			const req = db.transaction(STORE_NAME, "readonly").objectStore(STORE_NAME).get(KEY_NAME);
+			req.onsuccess = () => resolve(req.result);
+			req.onerror = () => reject(req.error);
+		});
+	} catch (e) {
+		console.error("Failed to get handle from IndexedDB", e);
+		return null;
+	}
+}
+async function saveFolderHandle(handle) {
+	try {
+		const db = await getDB();
+		return new Promise((resolve, reject) => {
+			const req = db.transaction(STORE_NAME, "readwrite").objectStore(STORE_NAME).put(handle, KEY_NAME);
+			req.onsuccess = () => resolve();
+			req.onerror = () => reject(req.error);
+		});
+	} catch (e) {
+		console.error("Failed to save handle to IndexedDB", e);
+	}
+}
 function ObsidianPanel({ wam, analyser }) {
 	const [params, setParams] = (0, import_react.useState)(null);
-	const [presets, setPresets] = (0, import_react.useState)(() => {
-		if (typeof window === "undefined") return [{
-			name: "Init",
-			state: DEFAULT_PARAMS
-		}];
-		const savedStr = localStorage.getItem("obsidian_presets");
-		let loaded = [];
-		if (savedStr) try {
-			loaded = JSON.parse(savedStr);
-		} catch (e) {}
-		const custom = loaded.filter((p) => p && p.name && p.name !== "Init");
-		return [{
-			name: "Init",
-			state: DEFAULT_PARAMS
-		}, ...custom];
-	});
+	const [presets, setPresets] = (0, import_react.useState)(() => [{
+		name: "Init",
+		state: DEFAULT_PARAMS
+	}]);
 	const [currentPresetIndex, setCurrentPresetIndex] = (0, import_react.useState)(0);
 	const [isSaving, setIsSaving] = (0, import_react.useState)(false);
 	const [newPresetName, setNewPresetName] = (0, import_react.useState)("");
+	const [folderName, setFolderName] = (0, import_react.useState)("");
+	const [syncStatus, setSyncStatus] = (0, import_react.useState)("");
+	const dirHandleRef = (0, import_react.useRef)(null);
+	const isSupported = typeof window !== "undefined" && !!window.showDirectoryPicker;
 	const statesEqual = (s1, s2) => {
 		if (!s1 || !s2) return false;
 		for (const key of Object.keys(DEFAULT_PARAMS)) if (s1[key] !== s2[key]) return false;
@@ -10572,6 +10607,73 @@ function ObsidianPanel({ wam, analyser }) {
 		if (wam) wam.setState(preset.state);
 		setParams({ ...preset.state });
 	};
+	const loadPresetsFromLocalStorage = () => {
+		const savedStr = localStorage.getItem("obsidian_presets");
+		let loaded = [];
+		if (savedStr) try {
+			loaded = JSON.parse(savedStr);
+		} catch (e) {}
+		const custom = loaded.filter((p) => p && p.name && p.name !== "Init");
+		setPresets([{
+			name: "Init",
+			state: DEFAULT_PARAMS
+		}, ...custom]);
+	};
+	const refreshPresetsFromFolder = async (handle) => {
+		if (!handle) return;
+		try {
+			const loaded = [];
+			for await (const entry of handle.values()) if (entry.kind === "file" && entry.name.toLowerCase().endsWith(".json")) try {
+				const content = await (await entry.getFile()).text();
+				const parsed = JSON.parse(content);
+				const state = parsed.state || parsed;
+				const name = parsed.name || entry.name.slice(0, -5);
+				loaded.push({
+					name,
+					state
+				});
+			} catch (fileErr) {
+				console.error("Error reading preset file:", entry.name, fileErr);
+			}
+			loaded.sort((a, b) => a.name.localeCompare(b.name));
+			setPresets([{
+				name: "Init",
+				state: DEFAULT_PARAMS
+			}, ...loaded]);
+		} catch (err) {
+			console.error("Failed to read presets from folder:", err);
+		}
+	};
+	(0, import_react.useEffect)(() => {
+		if (!isSupported) {
+			setSyncStatus("unsupported");
+			loadPresetsFromLocalStorage();
+			return;
+		}
+		const initFolder = async () => {
+			const handle = await getSavedFolderHandle();
+			if (handle) {
+				dirHandleRef.current = handle;
+				setFolderName(handle.name);
+				try {
+					if (await handle.queryPermission({ mode: "readwrite" }) === "granted") {
+						setSyncStatus("active");
+						await refreshPresetsFromFolder(handle);
+					} else {
+						setSyncStatus("unauthorized");
+						loadPresetsFromLocalStorage();
+					}
+				} catch (e) {
+					setSyncStatus("unauthorized");
+					loadPresetsFromLocalStorage();
+				}
+			} else {
+				setSyncStatus("");
+				loadPresetsFromLocalStorage();
+			}
+		};
+		initFolder();
+	}, [isSupported]);
 	const handlePrevPreset = () => {
 		let nextIdx = currentPresetIndex - 1;
 		if (nextIdx < 0) nextIdx = presets.length - 1;
@@ -10584,40 +10686,99 @@ function ObsidianPanel({ wam, analyser }) {
 		setCurrentPresetIndex(nextIdx);
 		loadPreset(presets[nextIdx]);
 	};
-	const handleConfirmSave = () => {
+	const handleConfirmSave = async () => {
 		const name = newPresetName.trim();
 		if (!name) return;
 		if (name === "Init") {
 			alert("Cannot overwrite \"Init\" preset.");
 			return;
 		}
-		const existingIdx = presets.findIndex((p) => p.name === name);
-		let updatedPresets;
-		if (existingIdx !== -1) {
-			updatedPresets = [...presets];
-			updatedPresets[existingIdx] = {
+		const state = { ...params };
+		if (syncStatus === "active" && dirHandleRef.current) try {
+			const handle = dirHandleRef.current;
+			const fileName = `${name}.json`;
+			const writable = await (await handle.getFileHandle(fileName, { create: true })).createWritable();
+			await writable.write(JSON.stringify(state, null, 2));
+			await writable.close();
+			await refreshPresetsFromFolder(handle);
+		} catch (err) {
+			console.error("Failed to save preset to folder:", err);
+			alert("Failed to save preset to folder.");
+		}
+		else {
+			const existingIdx = presets.findIndex((p) => p.name === name);
+			let updatedPresets;
+			if (existingIdx !== -1) {
+				updatedPresets = [...presets];
+				updatedPresets[existingIdx] = {
+					name,
+					state
+				};
+			} else updatedPresets = [...presets, {
 				name,
-				state: { ...params }
-			};
-		} else updatedPresets = [...presets, {
-			name,
-			state: { ...params }
-		}];
-		setPresets(updatedPresets);
-		localStorage.setItem("obsidian_presets", JSON.stringify(updatedPresets));
-		setCurrentPresetIndex(updatedPresets.findIndex((p) => p.name === name));
+				state
+			}];
+			setPresets(updatedPresets);
+			localStorage.setItem("obsidian_presets", JSON.stringify(updatedPresets));
+		}
 		setIsSaving(false);
 		setNewPresetName("");
 	};
-	const handleDeletePreset = () => {
+	const handleDeletePreset = async () => {
 		const currentPreset = presets[currentPresetIndex];
 		if (!currentPreset || currentPreset.name === "Init") return;
-		const updatedPresets = presets.filter((_, idx) => idx !== currentPresetIndex);
-		setPresets(updatedPresets);
-		localStorage.setItem("obsidian_presets", JSON.stringify(updatedPresets));
-		const nextIdx = Math.max(0, currentPresetIndex - 1);
-		setCurrentPresetIndex(nextIdx);
-		loadPreset(updatedPresets[nextIdx]);
+		if (syncStatus === "active" && dirHandleRef.current) try {
+			const handle = dirHandleRef.current;
+			const fileName = `${currentPreset.name}.json`;
+			await handle.removeEntry(fileName);
+			await refreshPresetsFromFolder(handle);
+			const updatedPresets = presets.filter((_, idx) => idx !== currentPresetIndex);
+			const nextIdx = Math.max(0, currentPresetIndex - 1);
+			setCurrentPresetIndex(nextIdx);
+			loadPreset(updatedPresets[nextIdx]);
+		} catch (err) {
+			console.error("Failed to delete preset from folder:", err);
+			alert("Failed to delete preset from folder.");
+		}
+		else {
+			const updatedPresets = presets.filter((_, idx) => idx !== currentPresetIndex);
+			setPresets(updatedPresets);
+			localStorage.setItem("obsidian_presets", JSON.stringify(updatedPresets));
+			const nextIdx = Math.max(0, currentPresetIndex - 1);
+			setCurrentPresetIndex(nextIdx);
+			loadPreset(updatedPresets[nextIdx]);
+		}
+	};
+	const handleSetFolder = async () => {
+		if (!isSupported) return;
+		try {
+			const handle = await window.showDirectoryPicker({ mode: "readwrite" });
+			dirHandleRef.current = handle;
+			setFolderName(handle.name);
+			const permission = await handle.requestPermission({ mode: "readwrite" });
+			localStorage.setItem("obsidian_preset_folder", permission);
+			await saveFolderHandle(handle);
+			if (permission === "granted") {
+				setSyncStatus("active");
+				await refreshPresetsFromFolder(handle);
+			} else setSyncStatus("unauthorized");
+		} catch (err) {
+			console.error("Failed to set directory:", err);
+		}
+	};
+	const handleAuthorize = async () => {
+		const handle = dirHandleRef.current;
+		if (!handle) return;
+		try {
+			const permission = await handle.requestPermission({ mode: "readwrite" });
+			localStorage.setItem("obsidian_preset_folder", permission);
+			if (permission === "granted") {
+				setSyncStatus("active");
+				await refreshPresetsFromFolder(handle);
+			}
+		} catch (err) {
+			console.error("Authorization failed:", err);
+		}
 	};
 	(0, import_react.useEffect)(() => {
 		if (wam) setParams(wam.getState());
@@ -10739,228 +10900,324 @@ function ObsidianPanel({ wam, analyser }) {
 							children: "VIRTUAL ANALOG · WAM 2.0"
 						})]
 					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 						style: {
-							width: 220,
+							width: 260,
 							borderRight: `1px solid ${T.borderSubtle}`,
 							background: T.bgControl,
 							display: "flex",
 							flexDirection: "column",
 							justifyContent: "center",
 							padding: "0 8px",
-							fontFamily: "'Electrolize', monospace"
+							fontFamily: "'Electrolize', monospace",
+							gap: 4
 						},
-						children: isSaving ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						children: [isSaving ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 							style: {
 								display: "flex",
-								flexDirection: "column",
+								gap: 2
+							},
+							children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+									type: "text",
+									value: newPresetName,
+									onChange: (e) => setNewPresetName(e.target.value),
+									placeholder: "Preset name...",
+									style: {
+										flex: 1,
+										background: T.bgDeep,
+										border: `1px solid ${T.borderDef}`,
+										color: T.textPri,
+										fontFamily: "'Electrolize', monospace",
+										fontSize: 8.5,
+										padding: "2px 4px",
+										outline: "none",
+										borderRadius: 0,
+										transition: "none",
+										height: 20
+									},
+									autoFocus: true,
+									onKeyDown: (e) => {
+										if (e.key === "Enter") handleConfirmSave();
+										if (e.key === "Escape") setIsSaving(false);
+									}
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+									onClick: handleConfirmSave,
+									style: {
+										background: T.redBright,
+										border: "none",
+										color: T.textPri,
+										fontFamily: "'Electrolize', monospace",
+										fontSize: 8.5,
+										padding: "0 6px",
+										cursor: "pointer",
+										borderRadius: 0,
+										transition: "none",
+										height: 20
+									},
+									children: "SAVE"
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+									onClick: () => setIsSaving(false),
+									style: {
+										background: T.bgElevated,
+										border: `1px solid ${T.borderDef}`,
+										color: T.textSec,
+										fontFamily: "'Electrolize', monospace",
+										fontSize: 8.5,
+										padding: "0 6px",
+										cursor: "pointer",
+										borderRadius: 0,
+										transition: "none",
+										height: 20
+									},
+									children: "X"
+								})
+							]
+						}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							style: {
+								display: "flex",
+								alignItems: "center",
+								justifyContent: "space-between",
 								gap: 4
 							},
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								style: {
-									fontSize: 7.5,
-									color: T.textSec,
-									letterSpacing: "0.08em",
-									textTransform: "uppercase"
-								},
-								children: "SAVE PRESET AS"
-							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								style: {
-									display: "flex",
-									gap: 2
-								},
-								children: [
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-										type: "text",
-										value: newPresetName,
-										onChange: (e) => setNewPresetName(e.target.value),
-										placeholder: "Preset name...",
+							children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									style: {
+										display: "flex",
+										gap: 2
+									},
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+										onClick: handlePrevPreset,
 										style: {
-											flex: 1,
-											background: T.bgDeep,
+											background: T.bgElevated,
 											border: `1px solid ${T.borderDef}`,
 											color: T.textPri,
+											width: 20,
+											height: 20,
+											display: "flex",
+											alignItems: "center",
+											justifyContent: "center",
+											cursor: "pointer",
 											fontFamily: "'Electrolize', monospace",
-											fontSize: 8.5,
-											padding: "2px 4px",
-											outline: "none",
+											fontSize: 10,
 											borderRadius: 0,
 											transition: "none"
 										},
-										autoFocus: true,
-										onKeyDown: (e) => {
-											if (e.key === "Enter") handleConfirmSave();
-											if (e.key === "Escape") setIsSaving(false);
-										}
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-										onClick: handleConfirmSave,
+										children: "<"
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+										onClick: handleNextPreset,
 										style: {
-											background: T.redBright,
-											border: "none",
+											background: T.bgElevated,
+											border: `1px solid ${T.borderDef}`,
 											color: T.textPri,
-											fontFamily: "'Electrolize', monospace",
-											fontSize: 8.5,
-											padding: "2px 6px",
+											width: 20,
+											height: 20,
+											display: "flex",
+											alignItems: "center",
+											justifyContent: "center",
 											cursor: "pointer",
+											fontFamily: "'Electrolize', monospace",
+											fontSize: 10,
+											borderRadius: 0,
+											transition: "none"
+										},
+										children: ">"
+									})]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+									style: {
+										flex: 1,
+										textAlign: "center",
+										overflow: "hidden",
+										textOverflow: "ellipsis",
+										whiteSpace: "nowrap",
+										fontSize: 9.5,
+										color: displayName === "Unsaved" ? T.textSec : T.textPri,
+										border: `1px solid ${T.borderSubtle}`,
+										background: T.bgDeep,
+										height: 20,
+										lineHeight: "18px",
+										padding: "0 4px",
+										letterSpacing: "0.04em"
+									},
+									children: displayName
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									style: {
+										display: "flex",
+										gap: 2
+									},
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+										onClick: () => {
+											setNewPresetName("");
+											setIsSaving(true);
+										},
+										style: {
+											background: T.bgElevated,
+											border: `1px solid ${T.borderDef}`,
+											color: T.textPri,
+											fontSize: 8.5,
+											height: 20,
+											padding: "0 6px",
+											cursor: "pointer",
+											fontFamily: "'Electrolize', monospace",
 											borderRadius: 0,
 											transition: "none"
 										},
 										children: "SAVE"
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-										onClick: () => setIsSaving(false),
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+										onClick: handleDeletePreset,
+										disabled: matchingPreset && matchingPreset.name === "Init",
+										style: {
+											background: T.bgElevated,
+											border: `1px solid ${T.borderDef}`,
+											color: matchingPreset && matchingPreset.name === "Init" ? T.textDim : T.textRed,
+											fontSize: 8.5,
+											height: 20,
+											padding: "0 6px",
+											cursor: "pointer",
+											opacity: matchingPreset && matchingPreset.name === "Init" ? .5 : 1,
+											fontFamily: "'Electrolize', monospace",
+											borderRadius: 0,
+											transition: "none"
+										},
+										children: "DEL"
+									})]
+								})
+							]
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							style: {
+								display: "flex",
+								alignItems: "center",
+								justifyContent: "space-between",
+								height: 20
+							},
+							children: [
+								syncStatus === "unsupported" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+									style: {
+										fontSize: 7.5,
+										color: T.textSec,
+										letterSpacing: "0.02em",
+										whiteSpace: "nowrap"
+									},
+									children: "Folder sync unavailable in this browser"
+								}),
+								syncStatus !== "unsupported" && !folderName && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+									onClick: handleSetFolder,
+									style: {
+										background: T.bgElevated,
+										border: `1px solid ${T.borderDef}`,
+										color: T.textPri,
+										fontFamily: "'Electrolize', monospace",
+										fontSize: 8,
+										height: 18,
+										padding: "0 8px",
+										cursor: "pointer",
+										borderRadius: 0,
+										transition: "none",
+										width: "100%"
+									},
+									children: "SET PRESETS FOLDER"
+								}),
+								syncStatus === "unauthorized" && folderName && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									style: {
+										display: "flex",
+										alignItems: "center",
+										justifyContent: "space-between",
+										width: "100%",
+										gap: 4
+									},
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+										title: folderName,
+										style: {
+											fontSize: 8,
+											color: T.textRed,
+											overflow: "hidden",
+											textOverflow: "ellipsis",
+											whiteSpace: "nowrap",
+											flex: 1,
+											textAlign: "left"
+										},
+										children: ["🔑 ", folderName]
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										style: {
+											display: "flex",
+											gap: 2
+										},
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+											onClick: handleAuthorize,
+											style: {
+												background: T.redBright,
+												border: "none",
+												color: T.textPri,
+												fontFamily: "'Electrolize', monospace",
+												fontSize: 8,
+												height: 18,
+												padding: "0 6px",
+												cursor: "pointer",
+												borderRadius: 0,
+												transition: "none"
+											},
+											children: "AUTH"
+										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+											onClick: handleSetFolder,
+											style: {
+												background: T.bgElevated,
+												border: `1px solid ${T.borderDef}`,
+												color: T.textSec,
+												fontFamily: "'Electrolize', monospace",
+												fontSize: 8,
+												height: 18,
+												padding: "0 6px",
+												cursor: "pointer",
+												borderRadius: 0,
+												transition: "none"
+											},
+											children: "CHANGE"
+										})]
+									})]
+								}),
+								syncStatus === "active" && folderName && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									style: {
+										display: "flex",
+										alignItems: "center",
+										justifyContent: "space-between",
+										width: "100%",
+										gap: 4
+									},
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+										title: folderName,
+										style: {
+											fontSize: 8,
+											color: T.textLabel,
+											overflow: "hidden",
+											textOverflow: "ellipsis",
+											whiteSpace: "nowrap",
+											flex: 1,
+											textAlign: "left"
+										},
+										children: ["📁 ", folderName]
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+										onClick: handleSetFolder,
 										style: {
 											background: T.bgElevated,
 											border: `1px solid ${T.borderDef}`,
 											color: T.textSec,
 											fontFamily: "'Electrolize', monospace",
-											fontSize: 8.5,
-											padding: "2px 6px",
+											fontSize: 8,
+											height: 18,
+											padding: "0 6px",
 											cursor: "pointer",
 											borderRadius: 0,
 											transition: "none"
 										},
-										children: "X"
-									})
-								]
-							})]
-						}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							style: {
-								display: "flex",
-								flexDirection: "column",
-								gap: 4
-							},
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								style: {
-									display: "flex",
-									flexDirection: "row",
-									alignItems: "center",
-									justifyContent: "space-between"
-								},
-								children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-									style: {
-										fontSize: 7.5,
-										color: T.textSec,
-										letterSpacing: "0.08em",
-										textTransform: "uppercase"
-									},
-									children: "PRESET"
+										children: "CHANGE"
+									})]
 								})
-							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								style: {
-									display: "flex",
-									alignItems: "center",
-									justifyContent: "space-between",
-									gap: 4
-								},
-								children: [
-									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-										style: {
-											display: "flex",
-											gap: 2
-										},
-										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-											onClick: handlePrevPreset,
-											style: {
-												background: T.bgElevated,
-												border: `1px solid ${T.borderDef}`,
-												color: T.textPri,
-												width: 20,
-												height: 20,
-												display: "flex",
-												alignItems: "center",
-												justifyContent: "center",
-												cursor: "pointer",
-												fontFamily: "'Electrolize', monospace",
-												fontSize: 10,
-												borderRadius: 0,
-												transition: "none"
-											},
-											children: "<"
-										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-											onClick: handleNextPreset,
-											style: {
-												background: T.bgElevated,
-												border: `1px solid ${T.borderDef}`,
-												color: T.textPri,
-												width: 20,
-												height: 20,
-												display: "flex",
-												alignItems: "center",
-												justifyContent: "center",
-												cursor: "pointer",
-												fontFamily: "'Electrolize', monospace",
-												fontSize: 10,
-												borderRadius: 0,
-												transition: "none"
-											},
-											children: ">"
-										})]
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-										style: {
-											flex: 1,
-											textAlign: "center",
-											overflow: "hidden",
-											textOverflow: "ellipsis",
-											whiteSpace: "nowrap",
-											fontSize: 9.5,
-											color: displayName === "Unsaved" ? T.textSec : T.textPri,
-											border: `1px solid ${T.borderSubtle}`,
-											background: T.bgDeep,
-											height: 20,
-											lineHeight: "18px",
-											padding: "0 4px",
-											letterSpacing: "0.04em"
-										},
-										children: displayName
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-										style: {
-											display: "flex",
-											gap: 2
-										},
-										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-											onClick: () => {
-												setNewPresetName("");
-												setIsSaving(true);
-											},
-											style: {
-												background: T.bgElevated,
-												border: `1px solid ${T.borderDef}`,
-												color: T.textPri,
-												fontSize: 8.5,
-												height: 20,
-												padding: "0 6px",
-												cursor: "pointer",
-												fontFamily: "'Electrolize', monospace",
-												borderRadius: 0,
-												transition: "none"
-											},
-											children: "SAVE"
-										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-											onClick: handleDeletePreset,
-											disabled: matchingPreset && matchingPreset.name === "Init",
-											style: {
-												background: T.bgElevated,
-												border: `1px solid ${T.borderDef}`,
-												color: matchingPreset && matchingPreset.name === "Init" ? T.textDim : T.textRed,
-												fontSize: 8.5,
-												height: 20,
-												padding: "0 6px",
-												cursor: "pointer",
-												opacity: matchingPreset && matchingPreset.name === "Init" ? .5 : 1,
-												fontFamily: "'Electrolize', monospace",
-												borderRadius: 0,
-												transition: "none"
-											},
-											children: "DEL"
-										})]
-									})
-								]
-							})]
-						})
+							]
+						})]
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 						style: {
