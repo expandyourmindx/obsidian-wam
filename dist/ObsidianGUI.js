@@ -10264,12 +10264,9 @@ function FilterDisplay({ W = 640, H = 80, cutoff = .5, res = .5 }) {
 		let t0 = null;
 		function frame(ts) {
 			if (!t0) t0 = ts;
-			const t = (ts - t0) / 1e3;
-			const wobbleCutoff = cutoff + .015 * Math.sin(t * 2.5);
-			const wobbleRes = res + .015 * Math.cos(t * 2);
-			const clampedCutoff = Math.max(.001, Math.min(1, wobbleCutoff));
-			const clampedRes = Math.max(0, Math.min(1, wobbleRes));
-			const fc = 35 * Math.pow(600, clampedCutoff);
+			(ts - t0) / 1e3;
+			const fc = 35 * Math.pow(600, Math.max(0, Math.min(1, cutoff)));
+			const rv = Math.max(0, Math.min(1, res));
 			ctx.fillStyle = T.bgDeep;
 			ctx.fillRect(0, 0, W, H);
 			ctx.save();
@@ -10300,7 +10297,7 @@ function FilterDisplay({ W = 640, H = 80, cutoff = .5, res = .5 }) {
 			});
 			ctx.restore();
 			const pts = Array.from({ length: W }, (_, i) => {
-				return [i, gainY(lp(20 * Math.pow(1e3, i / (W - 1)), fc, clampedRes))];
+				return [i, gainY(lp(20 * Math.pow(1e3, i / (W - 1)), fc, rv))];
 			});
 			ctx.save();
 			ctx.shadowColor = "rgba(196,43,43,0.6)";
@@ -10435,20 +10432,19 @@ function ADSRDisplay({ attack = .5, decay = .5, sustain = .5, release = .5, W = 
 		})
 	});
 }
-function ObsidianPanel({ wam }) {
-	const [params, setParams] = (0, import_react.useState)(null);
+function Spectrogram({ analyser, W = 538, H = 52 }) {
 	const specCvs = (0, import_react.useRef)(null);
 	const specRaf = (0, import_react.useRef)(null);
-	(0, import_react.useEffect)(() => {
-		if (wam) setParams(wam.getState());
-		else setParams({ ...DEFAULT_PARAMS });
-	}, [wam]);
 	(0, import_react.useEffect)(() => {
 		const canvas = specCvs.current;
 		if (!canvas) return;
 		const ctx = canvas.getContext("2d");
-		const W = canvas.width;
-		const H = canvas.height;
+		const sampleRate = analyser ? analyser.context.sampleRate || 44100 : 44100;
+		const bufferLength = analyser ? analyser.frequencyBinCount : 0;
+		const dataArray = analyser ? new Float32Array(bufferLength) : null;
+		const logMin = Math.log10(20);
+		const logMax = Math.log10(2e4);
+		const xOfFreq = (f) => (Math.log10(f) - logMin) / (logMax - logMin) * W;
 		let t0 = null;
 		function draw(ts) {
 			if (!t0) t0 = ts;
@@ -10457,20 +10453,36 @@ function ObsidianPanel({ wam }) {
 			ctx.fillRect(0, 0, W, H);
 			ctx.strokeStyle = T.borderGhost;
 			ctx.lineWidth = .5;
-			for (let x = 40; x < W; x += 40) {
+			[
+				100,
+				500,
+				2e3,
+				8e3
+			].forEach((f) => {
+				const x = xOfFreq(f);
 				ctx.beginPath();
 				ctx.moveTo(x, 0);
 				ctx.lineTo(x, H);
 				ctx.stroke();
-			}
-			for (let y = 10; y < H; y += 15) {
-				ctx.beginPath();
-				ctx.moveTo(0, y);
-				ctx.lineTo(W, y);
-				ctx.stroke();
-			}
+			});
 			const pts = [];
-			for (let x = 0; x < W; x++) {
+			if (analyser && dataArray) {
+				analyser.getFloatFrequencyData(dataArray);
+				const minDb = analyser.minDecibels || -100;
+				const dbRange = (analyser.maxDecibels || -30) - minDb;
+				for (let x = 0; x < W; x++) {
+					const normX = x / (W - 1);
+					const binIndex = 20 * Math.pow(1e3, normX) / (sampleRate / 2) * (bufferLength - 1);
+					const idx = Math.min(bufferLength - 1, Math.max(0, binIndex));
+					const i0 = Math.floor(idx);
+					const i1 = Math.min(bufferLength - 1, i0 + 1);
+					const fraction = idx - i0;
+					const db = dataArray[i0] * (1 - fraction) + dataArray[i1] * fraction;
+					const normVal = Math.max(0, Math.min(1, (db - minDb) / dbRange));
+					const y = H - 2 - normVal * (H - 6);
+					pts.push([x, y]);
+				}
+			} else for (let x = 0; x < W; x++) {
 				const normX = x / W;
 				const peak1 = .6 * Math.exp(-Math.pow(normX - (.15 + .05 * Math.sin(t * 1.5)), 2) * 150);
 				const peak2 = .4 * Math.exp(-Math.pow(normX - (.3 + .08 * Math.cos(t * 2.1)), 2) * 100);
@@ -10500,7 +10512,28 @@ function ObsidianPanel({ wam }) {
 		}
 		specRaf.current = requestAnimationFrame(draw);
 		return () => cancelAnimationFrame(specRaf.current);
-	}, []);
+	}, [
+		analyser,
+		W,
+		H
+	]);
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("canvas", {
+		ref: specCvs,
+		width: W,
+		height: H,
+		style: {
+			display: "block",
+			width: "100%",
+			height: "100%"
+		}
+	});
+}
+function ObsidianPanel({ wam, analyser }) {
+	const [params, setParams] = (0, import_react.useState)(null);
+	(0, import_react.useEffect)(() => {
+		if (wam) setParams(wam.getState());
+		else setParams({ ...DEFAULT_PARAMS });
+	}, [wam]);
 	const updateParam = (key, rawValue) => {
 		let paramValue = rawValue;
 		if (key === "filterResonance") paramValue = rawValue * 3.8;
@@ -10620,16 +10653,7 @@ function ObsidianPanel({ wam }) {
 						flex: 1,
 						position: "relative"
 					},
-					children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("canvas", {
-						ref: specCvs,
-						width: 538,
-						height: 52,
-						style: {
-							display: "block",
-							width: "100%",
-							height: "100%"
-						}
-					})
+					children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Spectrogram, { analyser })
 				})]
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
@@ -11557,9 +11581,12 @@ function ObsidianPanel({ wam }) {
 }
 //#endregion
 //#region src/ObsidianGUI.js
-function mountGUI(container, wam) {
+function mountGUI(container, wam, analyser) {
 	const root = (0, import_client.createRoot)(container);
-	root.render((0, import_react.createElement)(ObsidianPanel, { wam }));
+	root.render((0, import_react.createElement)(ObsidianPanel, {
+		wam,
+		analyser
+	}));
 	return root;
 }
 //#endregion

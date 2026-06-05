@@ -639,7 +639,11 @@ var ObsidianWAM = class extends WebAudioModule_default {
 		const container = document.createElement("div");
 		container.style.width = "660px";
 		container.style.background = "#131010";
-		mountGUI(container, this);
+		const analyser = this.audioContext.createAnalyser();
+		analyser.fftSize = 2048;
+		analyser.smoothingTimeConstant = .8;
+		this.audioNode.connect(analyser);
+		mountGUI(container, this, analyser);
 		return container;
 	}
 };

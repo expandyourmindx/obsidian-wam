@@ -263,12 +263,8 @@ function FilterDisplay({ W = 640, H = 80, cutoff = 0.5, res = 0.5 }) {
       if (!t0) t0 = ts;
       const t = (ts - t0) / 1000;
 
-      const wobbleCutoff = cutoff + 0.015 * Math.sin(t * 2.5);
-      const wobbleRes = res + 0.015 * Math.cos(t * 2.0);
-      const clampedCutoff = Math.max(0.001, Math.min(1, wobbleCutoff));
-      const clampedRes = Math.max(0, Math.min(1, wobbleRes));
-
-      const fc = 35 * Math.pow(600, clampedCutoff);
+      const fc = 35 * Math.pow(600, Math.max(0, Math.min(1, cutoff)));
+      const rv = Math.max(0, Math.min(1, res));
 
       ctx.fillStyle = T.bgDeep;
       ctx.fillRect(0, 0, W, H);
@@ -288,7 +284,7 @@ function FilterDisplay({ W = 640, H = 80, cutoff = 0.5, res = 0.5 }) {
 
       const pts = Array.from({ length: W }, (_, i) => {
         const f = 20 * Math.pow(1000, i / (W - 1));
-        return [i, gainY(lp(f, fc, clampedRes))];
+        return [i, gainY(lp(f, fc, rv))];
       });
 
       ctx.save();
@@ -406,28 +402,23 @@ function ADSRDisplay({ attack = 0.5, decay = 0.5, sustain = 0.5, release = 0.5, 
   );
 }
 
-// ── Main ObsidianPanel Component ────────────────────────────────────────────────
-export default function ObsidianPanel({ wam }) {
-  const [params, setParams] = useState(null);
+// ── Spectrogram Component ────────────────────────────────────────────────────
+function Spectrogram({ analyser, W = 538, H = 52 }) {
   const specCvs = useRef(null);
   const specRaf = useRef(null);
 
-  // Load parameter values on mount
-  useEffect(() => {
-    if (wam) {
-      setParams(wam.getState());
-    } else {
-      setParams({ ...DEFAULT_PARAMS });
-    }
-  }, [wam]);
-
-  // Animated Spectrogram
   useEffect(() => {
     const canvas = specCvs.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
-    const W = canvas.width;
-    const H = canvas.height;
+
+    const sampleRate = analyser ? (analyser.context.sampleRate || 44100) : 44100;
+    const bufferLength = analyser ? analyser.frequencyBinCount : 0;
+    const dataArray = analyser ? new Float32Array(bufferLength) : null;
+
+    const logMin = Math.log10(20);
+    const logMax = Math.log10(20000);
+    const xOfFreq = f => ((Math.log10(f) - logMin) / (logMax - logMin)) * W;
 
     let t0 = null;
     function draw(ts) {
@@ -439,25 +430,49 @@ export default function ObsidianPanel({ wam }) {
 
       ctx.strokeStyle = T.borderGhost;
       ctx.lineWidth = 0.5;
-      for (let x = 40; x < W; x += 40) {
+      [100, 500, 2000, 8000].forEach(f => {
+        const x = xOfFreq(f);
         ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
-      }
-      for (let y = 10; y < H; y += 15) {
-        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
-      }
+      });
 
       const pts = [];
-      for (let x = 0; x < W; x++) {
-        const normX = x / W;
-        const peak1 = 0.6 * Math.exp(-Math.pow((normX - (0.15 + 0.05 * Math.sin(t * 1.5))), 2) * 150);
-        const peak2 = 0.4 * Math.exp(-Math.pow((normX - (0.3 + 0.08 * Math.cos(t * 2.1))), 2) * 100);
-        const peak3 = 0.2 * Math.exp(-Math.pow((normX - (0.6 + 0.12 * Math.sin(t * 0.9))), 2) * 50);
-        const noise = 0.05 * Math.sin(x * 0.5 + t * 20) * Math.sin(x * 0.05 - t * 10);
-        const jitter = 0.02 * Math.random();
 
-        const val = peak1 + peak2 + peak3 + noise + jitter + 0.05;
-        const y = H - 2 - Math.max(0, Math.min(1, val)) * (H - 6);
-        pts.push([x, y]);
+      if (analyser && dataArray) {
+        analyser.getFloatFrequencyData(dataArray);
+
+        const minDb = analyser.minDecibels || -100;
+        const maxDb = analyser.maxDecibels || -30;
+        const dbRange = maxDb - minDb;
+
+        for (let x = 0; x < W; x++) {
+          const normX = x / (W - 1);
+          const f = 20 * Math.pow(1000, normX);
+          const binIndex = (f / (sampleRate / 2)) * (bufferLength - 1);
+          
+          const idx = Math.min(bufferLength - 1, Math.max(0, binIndex));
+          const i0 = Math.floor(idx);
+          const i1 = Math.min(bufferLength - 1, i0 + 1);
+          const fraction = idx - i0;
+          const db = dataArray[i0] * (1 - fraction) + dataArray[i1] * fraction;
+
+          const normVal = Math.max(0, Math.min(1, (db - minDb) / dbRange));
+          const y = H - 2 - normVal * (H - 6);
+          pts.push([x, y]);
+        }
+      } else {
+        // Fallback to dummy math simulation
+        for (let x = 0; x < W; x++) {
+          const normX = x / W;
+          const peak1 = 0.6 * Math.exp(-Math.pow((normX - (0.15 + 0.05 * Math.sin(t * 1.5))), 2) * 150);
+          const peak2 = 0.4 * Math.exp(-Math.pow((normX - (0.3 + 0.08 * Math.cos(t * 2.1))), 2) * 100);
+          const peak3 = 0.2 * Math.exp(-Math.pow((normX - (0.6 + 0.12 * Math.sin(t * 0.9))), 2) * 50);
+          const noise = 0.05 * Math.sin(x * 0.5 + t * 20) * Math.sin(x * 0.05 - t * 10);
+          const jitter = 0.02 * Math.random();
+
+          const val = peak1 + peak2 + peak3 + noise + jitter + 0.05;
+          const y = H - 2 - Math.max(0, Math.min(1, val)) * (H - 6);
+          pts.push([x, y]);
+        }
       }
 
       ctx.fillStyle = 'rgba(61, 14, 14, 0.28)';
@@ -482,7 +497,23 @@ export default function ObsidianPanel({ wam }) {
 
     specRaf.current = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(specRaf.current);
-  }, []);
+  }, [analyser, W, H]);
+
+  return <canvas ref={specCvs} width={W} height={H} style={{ display: 'block', width: '100%', height: '100%' }} />;
+}
+
+// ── Main ObsidianPanel Component ────────────────────────────────────────────────
+export default function ObsidianPanel({ wam, analyser }) {
+  const [params, setParams] = useState(null);
+
+  // Load parameter values on mount
+  useEffect(() => {
+    if (wam) {
+      setParams(wam.getState());
+    } else {
+      setParams({ ...DEFAULT_PARAMS });
+    }
+  }, [wam]);
 
   const updateParam = (key, rawValue) => {
     let paramValue = rawValue;
@@ -628,7 +659,7 @@ export default function ObsidianPanel({ wam }) {
           </div>
           {/* Spectrogram Canvas */}
           <div style={{ flex: 1, position: 'relative' }}>
-            <canvas ref={specCvs} width={538} height={52} style={{ display: 'block', width: '100%', height: '100%' }} />
+            <Spectrogram analyser={analyser} />
           </div>
         </div>
 
