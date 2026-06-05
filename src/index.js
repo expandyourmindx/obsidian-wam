@@ -118,6 +118,27 @@ export default class ObsidianWAM extends WebAudioModule {
         });
     }
 
+    // Schedule a note-on at a precise AudioContext time (sample-accurate)
+    scheduleNote(time, note, velocity) {
+        this.audioNode.port.postMessage({
+            type: 'scheduleNote',
+            data: { time, noteType: 'noteOn', note, velocity }
+        });
+    }
+
+    // Schedule a note-off at a precise AudioContext time (sample-accurate)
+    scheduleNoteOff(time, note) {
+        this.audioNode.port.postMessage({
+            type: 'scheduleNote',
+            data: { time, noteType: 'noteOff', note, velocity: 0 }
+        });
+    }
+
+    // Clear all pending scheduled events
+    clearSchedule() {
+        this.audioNode.port.postMessage({ type: 'clearSchedule' });
+    }
+
     setParam(key, value) {
         if (this._paramState) this._paramState[key] = value;
         this.audioNode.port.postMessage({ type: 'setParam', data: { key, value } });

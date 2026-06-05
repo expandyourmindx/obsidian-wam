@@ -182,6 +182,9 @@ class ObsidianProcessor extends AudioWorkletProcessor {
         }
         this.activeVoiceCount = 0;
 
+        // Scheduled event queue — sorted by time ascending
+        this.scheduledEvents = [];
+
         // LFO — global, not per voice
         this.lfoPhase = 0;
         this.lfoPhaseIncrement = 2 / sampleRate; // default 1hz, full cycle = 2 units
@@ -257,6 +260,13 @@ class ObsidianProcessor extends AudioWorkletProcessor {
             const { type, data } = e.data;
             if (type === 'noteOn') this.noteOn(data.note, data.velocity);
             if (type === 'noteOff') this.noteOff(data.note);
+            if (type === 'scheduleNote') {
+                this.scheduledEvents.push(data);
+                this.scheduledEvents.sort((a, b) => a.time - b.time);
+            }
+            if (type === 'clearSchedule') {
+                this.scheduledEvents.length = 0;
+            }
             if (type === 'setParam') {
                 this.params[data.key] = data.value;
                 if (data.key === 'lfoRate') {
@@ -534,6 +544,15 @@ class ObsidianProcessor extends AudioWorkletProcessor {
         for (let i = 0; i < left.length; i++) {
             let sampleL = 0;
             let sampleR = 0;
+
+            // Fire any scheduled events that fall on or before this exact sample
+            const sampleTime = currentTime + i / sampleRate;
+            while (this.scheduledEvents.length > 0 &&
+                   this.scheduledEvents[0].time <= sampleTime) {
+                const ev = this.scheduledEvents.shift();
+                if (ev.noteType === 'noteOn') this.noteOn(ev.note, ev.velocity);
+                else if (ev.noteType === 'noteOff') this.noteOff(ev.note);
+            }
 
             // Advance LFO
             this.lfoPhase += this.lfoPhaseIncrement;
