@@ -81,25 +81,51 @@ export default class ObsidianWAM extends WebAudioModule {
     }
 
     async createAudioNode(options) {
-        // Register the processor with the AudioContext's worklet
-        // The processor file gets loaded as a separate module on the audio thread
         await this.audioContext.audioWorklet.addModule(
             new URL('./processor.js', import.meta.url)
         );
 
-        // Create the AudioWorkletNode — this is the node that
-        // connects into the host's audio graph
-        this.audioNode = new AudioWorkletNode(
+        const node = new AudioWorkletNode(
             this.audioContext,
             'obsidian-processor',
             {
-                numberOfInputs: 0,   // instrument — no audio input
+                numberOfInputs: 0,
                 numberOfOutputs: 1,
-                outputChannelCount: [2] // stereo output
+                outputChannelCount: [2]
             }
         );
 
-        return this.audioNode;
+        // Bridge WAM2 standard scheduleEvents API to Obsidian's processor postMessage protocol.
+        // This makes Obsidian compatible with any WAM2 host without touching the processor.
+        node.scheduleEvents = (...events) => {
+            for (const event of events) {
+                if (event.type === 'wam-midi') {
+                    const bytes = event.data.bytes;
+                    const status = bytes[0] & 0xF0;
+                    const note = bytes[1];
+                    const velocity = bytes[2];
+                    const time = event.time;
+                    const isScheduled = time !== undefined && time > this.audioContext.currentTime + 0.01;
+
+                    if (status === 0x90 && velocity > 0) {
+                        if (isScheduled) {
+                            node.port.postMessage({ type: 'scheduleNote', data: { time, noteType: 'noteOn', note, velocity } });
+                        } else {
+                            node.port.postMessage({ type: 'noteOn', data: { note, velocity } });
+                        }
+                    } else if (status === 0x80 || (status === 0x90 && velocity === 0)) {
+                        if (isScheduled) {
+                            node.port.postMessage({ type: 'scheduleNote', data: { time, noteType: 'noteOff', note, velocity: 0 } });
+                        } else {
+                            node.port.postMessage({ type: 'noteOff', data: { note } });
+                        }
+                    }
+                }
+            }
+        };
+
+        this._audioNode = node;
+        return node;
     }
 
     // Send a note on to the processor thread
@@ -152,7 +178,7 @@ export default class ObsidianWAM extends WebAudioModule {
         Object.entries(state).forEach(([key, value]) => this.setParam(key, value));
     }
 
-    async createGUI() {
+    async createGui() {
         const { mountGUI } = await import('./ObsidianGUI.js');
         const container = document.createElement('div');
         container.style.width = '660px';
@@ -161,7 +187,7 @@ export default class ObsidianWAM extends WebAudioModule {
         const analyser = this.audioContext.createAnalyser();
         analyser.fftSize = 2048;
         analyser.smoothingTimeConstant = 0.8;
-        this.audioNode.connect(analyser);
+        this._audioNode.connect(analyser);
 
         mountGUI(container, this, analyser);
         return container;
