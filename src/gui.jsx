@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { DEFAULT_PARAMS, DEFAULT_PRESETS } from "./defaultPresets.js";
 
 // ── Design Tokens ─────────────────────────────────────────────────────────────
 const T = {
@@ -23,64 +24,6 @@ const T = {
   textSec:      '#7a6860',   // --obs-text-sec
   textDim:      '#3f3430',   // --obs-text-dim
   textRed:      '#c42b2b',   // --obs-text-red
-};
-
-const DEFAULT_PARAMS = {
-    pitchBend: 0,
-    filterType: 'lowpass',
-    portamentoTime: 0.0,
-    portamentoMode: 'always',
-    osc1PulseWidth: 0.5,
-    osc2PulseWidth: 0.5,
-    osc3PulseWidth: 0.5,
-    osc1PWMDepth: 0.0,
-    osc2PWMDepth: 0.0,
-    osc3PWMDepth: 0.0,
-    unisonVoices: 1,
-    unisonDetune: 10,
-    unisonSpread: 0.8,
-    pitchEnvAmount: 0,
-    pitchEnvAttack: 0.001,
-    pitchEnvDecay: 0.2,
-    pitchEnvSustain: 0.0,
-    pitchEnvRelease: 0.1,
-    attack: 0.01,
-    decay: 0.1,
-    sustain: 0.7,
-    release: 0.3,
-    masterGain: 0.5,
-    stereoWidth: 1.0,
-    filterCutoff: 0.8,
-    filterResonance: 0.1,
-    filterAttack: 0.01,
-    filterDecay: 0.3,
-    filterSustain: 0.3,
-    filterRelease: 0.5,
-    filterEnvAmount: 0.0,
-    lfoRate: 1.0,
-    lfoDepth: 0.0,
-    lfoWaveform: 'sine',
-    lfoDestination: 'pitch',
-    velocityAmpSens: 1.0,
-    velocityFilterSens: 0.5,
-    osc1Waveform: 'saw',
-    osc1Coarse: 0,
-    osc1Fine: 0,
-    osc1Mix: 1.0,
-    osc1Pan: 0.0,
-    osc1Enabled: true,
-    osc2Waveform: 'saw',
-    osc2Coarse: 0,
-    osc2Fine: 7,
-    osc2Mix: 0.7,
-    osc2Pan: -0.3,
-    osc2Enabled: true,
-    osc3Waveform: 'square',
-    osc3Coarse: -12,
-    osc3Fine: 0,
-    osc3Mix: 0.5,
-    osc3Pan: 0.3,
-    osc3Enabled: true,
 };
 
 // ── Arc path helper ────────────────────────────────────────────────────────────
@@ -575,7 +518,7 @@ async function deleteFolderHandle() {
 export default function ObsidianPanel({ wam, analyser }) {
   const [params, setParams] = useState(null);
 
-  const [presets, setPresets] = useState(() => [{ name: 'Init', state: DEFAULT_PARAMS }]);
+  const [presets, setPresets] = useState(() => DEFAULT_PRESETS);
   const [currentPresetIndex, setCurrentPresetIndex] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [newPresetName, setNewPresetName] = useState('');
@@ -674,8 +617,8 @@ export default function ObsidianPanel({ wam, analyser }) {
         loaded = JSON.parse(savedStr);
       } catch (e) {}
     }
-    const custom = loaded.filter(p => p && p.name && p.name !== 'Init');
-    setPresets([{ name: 'Init', state: DEFAULT_PARAMS }, ...custom]);
+    const custom = loaded.filter(p => p && p.name && !DEFAULT_PRESETS.some(dp => dp.name === p.name));
+    setPresets([...DEFAULT_PRESETS, ...custom]);
   };
 
   const refreshPresetsFromFolder = async (handle) => {
@@ -697,7 +640,8 @@ export default function ObsidianPanel({ wam, analyser }) {
         }
       }
       loaded.sort((a, b) => a.name.localeCompare(b.name));
-      setPresets([{ name: 'Init', state: DEFAULT_PARAMS }, ...loaded]);
+      const custom = loaded.filter(p => !DEFAULT_PRESETS.some(dp => dp.name === p.name));
+      setPresets([...DEFAULT_PRESETS, ...custom]);
     } catch (err) {
       console.error('Failed to read presets from folder:', err);
     }
@@ -758,8 +702,8 @@ export default function ObsidianPanel({ wam, analyser }) {
   const handleConfirmSave = async () => {
     const name = newPresetName.trim();
     if (!name) return;
-    if (name === 'Init') {
-      alert('Cannot overwrite "Init" preset.');
+    if (DEFAULT_PRESETS.some(dp => dp.name === name)) {
+      alert(`Cannot overwrite "${name}" default preset.`);
       return;
     }
 
@@ -788,7 +732,8 @@ export default function ObsidianPanel({ wam, analyser }) {
         updatedPresets = [...presets, { name, state }];
       }
       setPresets(updatedPresets);
-      localStorage.setItem('obsidian_presets', JSON.stringify(updatedPresets));
+      const customOnly = updatedPresets.filter(p => !DEFAULT_PRESETS.some(dp => dp.name === p.name));
+      localStorage.setItem('obsidian_presets', JSON.stringify(customOnly));
     }
 
     setIsSaving(false);
@@ -797,7 +742,7 @@ export default function ObsidianPanel({ wam, analyser }) {
 
   const handleDeletePreset = async () => {
     const currentPreset = presets[currentPresetIndex];
-    if (!currentPreset || currentPreset.name === 'Init') return;
+    if (!currentPreset || DEFAULT_PRESETS.some(dp => dp.name === currentPreset.name)) return;
 
     if (syncStatus === 'active' && dirHandleRef.current) {
       try {
@@ -817,7 +762,8 @@ export default function ObsidianPanel({ wam, analyser }) {
     } else {
       const updatedPresets = presets.filter((_, idx) => idx !== currentPresetIndex);
       setPresets(updatedPresets);
-      localStorage.setItem('obsidian_presets', JSON.stringify(updatedPresets));
+      const customOnly = updatedPresets.filter(p => !DEFAULT_PRESETS.some(dp => dp.name === p.name));
+      localStorage.setItem('obsidian_presets', JSON.stringify(customOnly));
 
       const nextIdx = Math.max(0, currentPresetIndex - 1);
       setCurrentPresetIndex(nextIdx);
@@ -1147,23 +1093,54 @@ export default function ObsidianPanel({ wam, analyser }) {
                   </button>
                 </div>
 
-                <div style={{
-                  flex: 1,
-                  textAlign: 'center',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                  fontSize: 9.5,
-                  color: displayName === 'Unsaved' ? T.textSec : T.textPri,
-                  border: `1px solid ${T.borderSubtle}`,
-                  background: T.bgDeep,
-                  height: 20,
-                  lineHeight: '18px',
-                  padding: '0 4px',
-                  letterSpacing: '0.04em',
-                }}>
-                  {displayName}
-                </div>
+                <select
+                  value={displayName === 'Unsaved' ? 'unsaved' : currentPresetIndex}
+                  onChange={(e) => {
+                    if (e.target.value === 'unsaved') return;
+                    const idx = parseInt(e.target.value, 10);
+                    setCurrentPresetIndex(idx);
+                    loadPreset(presets[idx]);
+                  }}
+                  style={{
+                    flex: 1,
+                    textAlign: 'center',
+                    fontSize: 9.5,
+                    color: displayName === 'Unsaved' ? T.textSec : T.textPri,
+                    border: `1px solid ${T.borderSubtle}`,
+                    background: T.bgDeep,
+                    height: 20,
+                    outline: 'none',
+                    borderRadius: 0,
+                    cursor: 'pointer',
+                    padding: '0 4px',
+                    letterSpacing: '0.04em',
+                    fontFamily: "'Electrolize', monospace",
+                  }}
+                >
+                  {(() => {
+                    const categories = {};
+                    presets.forEach((p, idx) => {
+                      const cat = p.category || 'User / Custom';
+                      if (!categories[cat]) categories[cat] = [];
+                      categories[cat].push({ preset: p, index: idx });
+                    });
+                    
+                    return Object.entries(categories).map(([catName, items]) => (
+                      <optgroup key={catName} label={catName} style={{ background: T.bgSurface, color: T.textLabel }}>
+                        {items.map(item => (
+                          <option key={item.index} value={item.index} style={{ background: T.bgSurface, color: T.textPri }}>
+                            {item.preset.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ));
+                  })()}
+                  {displayName === 'Unsaved' && (
+                    <option value="unsaved" disabled>
+                      Unsaved
+                    </option>
+                  )}
+                </select>
 
                 <div style={{ display: 'flex', gap: 2 }}>
                   <button
@@ -1188,16 +1165,16 @@ export default function ObsidianPanel({ wam, analyser }) {
                   </button>
                   <button
                     onClick={handleDeletePreset}
-                    disabled={matchingPreset && matchingPreset.name === 'Init'}
+                    disabled={matchingPreset && DEFAULT_PRESETS.some(dp => dp.name === matchingPreset.name)}
                     style={{
                       background: T.bgElevated,
                       border: `1px solid ${T.borderDef}`,
-                      color: (matchingPreset && matchingPreset.name === 'Init') ? T.textDim : T.textRed,
+                      color: (matchingPreset && DEFAULT_PRESETS.some(dp => dp.name === matchingPreset.name)) ? T.textDim : T.textRed,
                       fontSize: 8.5,
                       height: 20,
                       padding: '0 6px',
                       cursor: 'pointer',
-                      opacity: (matchingPreset && matchingPreset.name === 'Init') ? 0.5 : 1,
+                      opacity: (matchingPreset && DEFAULT_PRESETS.some(dp => dp.name === matchingPreset.name)) ? 0.5 : 1,
                       fontFamily: "'Electrolize', monospace",
                       borderRadius: 0,
                       transition: 'none',

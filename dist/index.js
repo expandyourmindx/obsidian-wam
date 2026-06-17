@@ -1,3 +1,4 @@
+import { t as DEFAULT_PARAMS } from "./defaultPresets.js";
 //#region node_modules/@webaudiomodules/sdk/dist/index.js
 var WebAudioModule = class {
 	static get isWebAudioModuleConstructor() {
@@ -523,63 +524,6 @@ WamEventRingBuffer_default();
 AudioWorkletNode;
 //#endregion
 //#region src/index.js
-var DEFAULT_PARAMS = {
-	pitchBend: 0,
-	filterType: "lowpass",
-	portamentoTime: 0,
-	portamentoMode: "always",
-	osc1PulseWidth: .5,
-	osc2PulseWidth: .5,
-	osc3PulseWidth: .5,
-	osc1PWMDepth: 0,
-	osc2PWMDepth: 0,
-	osc3PWMDepth: 0,
-	unisonVoices: 1,
-	unisonDetune: 10,
-	unisonSpread: .8,
-	pitchEnvAmount: 0,
-	pitchEnvAttack: .001,
-	pitchEnvDecay: .2,
-	pitchEnvSustain: 0,
-	pitchEnvRelease: .1,
-	attack: .01,
-	decay: .1,
-	sustain: .7,
-	release: .3,
-	masterGain: .5,
-	stereoWidth: 1,
-	filterCutoff: .8,
-	filterResonance: .1,
-	filterAttack: .01,
-	filterDecay: .3,
-	filterSustain: .3,
-	filterRelease: .5,
-	filterEnvAmount: 0,
-	lfoRate: 1,
-	lfoDepth: 0,
-	lfoWaveform: "sine",
-	lfoDestination: "pitch",
-	velocityAmpSens: 1,
-	velocityFilterSens: .5,
-	osc1Waveform: "saw",
-	osc1Coarse: 0,
-	osc1Fine: 0,
-	osc1Mix: 1,
-	osc1Pan: 0,
-	osc1Enabled: true,
-	osc2Waveform: "saw",
-	osc2Coarse: 0,
-	osc2Fine: 7,
-	osc2Mix: .7,
-	osc2Pan: -.3,
-	osc2Enabled: true,
-	osc3Waveform: "square",
-	osc3Coarse: -12,
-	osc3Fine: 0,
-	osc3Mix: .5,
-	osc3Pan: .3,
-	osc3Enabled: true
-};
 var ObsidianWAM = class extends WebAudioModule_default {
 	static descriptor = {
 		name: "Obsidian",

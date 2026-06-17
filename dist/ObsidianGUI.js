@@ -1,3 +1,4 @@
+import { n as DEFAULT_PRESETS, t as DEFAULT_PARAMS } from "./defaultPresets.js";
 //#region \0rolldown/runtime.js
 var __commonJSMin = (cb, mod) => () => (mod || (cb((mod = { exports: {} }).exports, mod), cb = null), mod.exports);
 //#endregion
@@ -9924,63 +9925,6 @@ var T = {
 	textDim: "#3f3430",
 	textRed: "#c42b2b"
 };
-var DEFAULT_PARAMS = {
-	pitchBend: 0,
-	filterType: "lowpass",
-	portamentoTime: 0,
-	portamentoMode: "always",
-	osc1PulseWidth: .5,
-	osc2PulseWidth: .5,
-	osc3PulseWidth: .5,
-	osc1PWMDepth: 0,
-	osc2PWMDepth: 0,
-	osc3PWMDepth: 0,
-	unisonVoices: 1,
-	unisonDetune: 10,
-	unisonSpread: .8,
-	pitchEnvAmount: 0,
-	pitchEnvAttack: .001,
-	pitchEnvDecay: .2,
-	pitchEnvSustain: 0,
-	pitchEnvRelease: .1,
-	attack: .01,
-	decay: .1,
-	sustain: .7,
-	release: .3,
-	masterGain: .5,
-	stereoWidth: 1,
-	filterCutoff: .8,
-	filterResonance: .1,
-	filterAttack: .01,
-	filterDecay: .3,
-	filterSustain: .3,
-	filterRelease: .5,
-	filterEnvAmount: 0,
-	lfoRate: 1,
-	lfoDepth: 0,
-	lfoWaveform: "sine",
-	lfoDestination: "pitch",
-	velocityAmpSens: 1,
-	velocityFilterSens: .5,
-	osc1Waveform: "saw",
-	osc1Coarse: 0,
-	osc1Fine: 0,
-	osc1Mix: 1,
-	osc1Pan: 0,
-	osc1Enabled: true,
-	osc2Waveform: "saw",
-	osc2Coarse: 0,
-	osc2Fine: 7,
-	osc2Mix: .7,
-	osc2Pan: -.3,
-	osc2Enabled: true,
-	osc3Waveform: "square",
-	osc3Coarse: -12,
-	osc3Fine: 0,
-	osc3Mix: .5,
-	osc3Pan: .3,
-	osc3Enabled: true
-};
 function ap(cx, cy, r, a1, a2) {
 	const R = (a) => (a - 90) * (Math.PI / 180);
 	const x1 = cx + r * Math.cos(R(a1));
@@ -10573,10 +10517,7 @@ async function saveFolderHandle(handle) {
 }
 function ObsidianPanel({ wam, analyser }) {
 	const [params, setParams] = (0, import_react.useState)(null);
-	const [presets, setPresets] = (0, import_react.useState)(() => [{
-		name: "Init",
-		state: DEFAULT_PARAMS
-	}]);
+	const [presets, setPresets] = (0, import_react.useState)(() => DEFAULT_PRESETS);
 	const [currentPresetIndex, setCurrentPresetIndex] = (0, import_react.useState)(0);
 	const [isSaving, setIsSaving] = (0, import_react.useState)(false);
 	const [newPresetName, setNewPresetName] = (0, import_react.useState)("");
@@ -10644,11 +10585,8 @@ function ObsidianPanel({ wam, analyser }) {
 		if (savedStr) try {
 			loaded = JSON.parse(savedStr);
 		} catch (e) {}
-		const custom = loaded.filter((p) => p && p.name && p.name !== "Init");
-		setPresets([{
-			name: "Init",
-			state: DEFAULT_PARAMS
-		}, ...custom]);
+		const custom = loaded.filter((p) => p && p.name && !DEFAULT_PRESETS.some((dp) => dp.name === p.name));
+		setPresets([...DEFAULT_PRESETS, ...custom]);
 	};
 	const refreshPresetsFromFolder = async (handle) => {
 		if (!handle) return;
@@ -10667,10 +10605,8 @@ function ObsidianPanel({ wam, analyser }) {
 				console.error("Error reading preset file:", entry.name, fileErr);
 			}
 			loaded.sort((a, b) => a.name.localeCompare(b.name));
-			setPresets([{
-				name: "Init",
-				state: DEFAULT_PARAMS
-			}, ...loaded]);
+			const custom = loaded.filter((p) => !DEFAULT_PRESETS.some((dp) => dp.name === p.name));
+			setPresets([...DEFAULT_PRESETS, ...custom]);
 		} catch (err) {
 			console.error("Failed to read presets from folder:", err);
 		}
@@ -10720,8 +10656,8 @@ function ObsidianPanel({ wam, analyser }) {
 	const handleConfirmSave = async () => {
 		const name = newPresetName.trim();
 		if (!name) return;
-		if (name === "Init") {
-			alert("Cannot overwrite \"Init\" preset.");
+		if (DEFAULT_PRESETS.some((dp) => dp.name === name)) {
+			alert(`Cannot overwrite "${name}" default preset.`);
 			return;
 		}
 		const state = { ...params };
@@ -10750,14 +10686,15 @@ function ObsidianPanel({ wam, analyser }) {
 				state
 			}];
 			setPresets(updatedPresets);
-			localStorage.setItem("obsidian_presets", JSON.stringify(updatedPresets));
+			const customOnly = updatedPresets.filter((p) => !DEFAULT_PRESETS.some((dp) => dp.name === p.name));
+			localStorage.setItem("obsidian_presets", JSON.stringify(customOnly));
 		}
 		setIsSaving(false);
 		setNewPresetName("");
 	};
 	const handleDeletePreset = async () => {
 		const currentPreset = presets[currentPresetIndex];
-		if (!currentPreset || currentPreset.name === "Init") return;
+		if (!currentPreset || DEFAULT_PRESETS.some((dp) => dp.name === currentPreset.name)) return;
 		if (syncStatus === "active" && dirHandleRef.current) try {
 			const handle = dirHandleRef.current;
 			const fileName = `${currentPreset.name}.json`;
@@ -10774,7 +10711,8 @@ function ObsidianPanel({ wam, analyser }) {
 		else {
 			const updatedPresets = presets.filter((_, idx) => idx !== currentPresetIndex);
 			setPresets(updatedPresets);
-			localStorage.setItem("obsidian_presets", JSON.stringify(updatedPresets));
+			const customOnly = updatedPresets.filter((p) => !DEFAULT_PRESETS.some((dp) => dp.name === p.name));
+			localStorage.setItem("obsidian_presets", JSON.stringify(customOnly));
 			const nextIdx = Math.max(0, currentPresetIndex - 1);
 			setCurrentPresetIndex(nextIdx);
 			loadPreset(updatedPresets[nextIdx]);
@@ -11068,23 +11006,59 @@ function ObsidianPanel({ wam, analyser }) {
 											children: ">"
 										})]
 									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", {
+										value: displayName === "Unsaved" ? "unsaved" : currentPresetIndex,
+										onChange: (e) => {
+											if (e.target.value === "unsaved") return;
+											const idx = parseInt(e.target.value, 10);
+											setCurrentPresetIndex(idx);
+											loadPreset(presets[idx]);
+										},
 										style: {
 											flex: 1,
 											textAlign: "center",
-											overflow: "hidden",
-											textOverflow: "ellipsis",
-											whiteSpace: "nowrap",
 											fontSize: 9.5,
 											color: displayName === "Unsaved" ? T.textSec : T.textPri,
 											border: `1px solid ${T.borderSubtle}`,
 											background: T.bgDeep,
 											height: 20,
-											lineHeight: "18px",
+											outline: "none",
+											borderRadius: 0,
+											cursor: "pointer",
 											padding: "0 4px",
-											letterSpacing: "0.04em"
+											letterSpacing: "0.04em",
+											fontFamily: "'Electrolize', monospace"
 										},
-										children: displayName
+										children: [(() => {
+											const categories = {};
+											presets.forEach((p, idx) => {
+												const cat = p.category || "User / Custom";
+												if (!categories[cat]) categories[cat] = [];
+												categories[cat].push({
+													preset: p,
+													index: idx
+												});
+											});
+											return Object.entries(categories).map(([catName, items]) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("optgroup", {
+												label: catName,
+												style: {
+													background: T.bgSurface,
+													color: T.textLabel
+												},
+												children: items.map((item) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+													value: item.index,
+													style: {
+														background: T.bgSurface,
+														color: T.textPri
+													},
+													children: item.preset.name
+												}, item.index))
+											}, catName));
+										})(), displayName === "Unsaved" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+											value: "unsaved",
+											disabled: true,
+											children: "Unsaved"
+										})]
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 										style: {
@@ -11111,16 +11085,16 @@ function ObsidianPanel({ wam, analyser }) {
 											children: "SAVE"
 										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 											onClick: handleDeletePreset,
-											disabled: matchingPreset && matchingPreset.name === "Init",
+											disabled: matchingPreset && DEFAULT_PRESETS.some((dp) => dp.name === matchingPreset.name),
 											style: {
 												background: T.bgElevated,
 												border: `1px solid ${T.borderDef}`,
-												color: matchingPreset && matchingPreset.name === "Init" ? T.textDim : T.textRed,
+												color: matchingPreset && DEFAULT_PRESETS.some((dp) => dp.name === matchingPreset.name) ? T.textDim : T.textRed,
 												fontSize: 8.5,
 												height: 20,
 												padding: "0 6px",
 												cursor: "pointer",
-												opacity: matchingPreset && matchingPreset.name === "Init" ? .5 : 1,
+												opacity: matchingPreset && DEFAULT_PRESETS.some((dp) => dp.name === matchingPreset.name) ? .5 : 1,
 												fontFamily: "'Electrolize', monospace",
 												borderRadius: 0,
 												transition: "none"
